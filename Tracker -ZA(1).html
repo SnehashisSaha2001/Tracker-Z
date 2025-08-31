@@ -1,0 +1,3376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Tracker App</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet"/>
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <!-- Socket.IO -->
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <style>
+    :root {
+      --primary-color: #0e2a47;
+      --accent-color: #00d4ff;
+      --bg-gradient: linear-gradient(to bottom right, #0f2027, #203a43, #2c5364);
+      --card-bg: #1e2e3e;
+      --text-light: #f1f1f1;
+    }
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      font-family: 'Inter', sans-serif;
+      margin: 0;
+      background: var(--bg-gradient);
+      color: var(--text-light);
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+    @media (min-width: 768px) {
+      body {
+        flex-direction: row;
+      }
+    }
+    .sidebar {
+      width: 100%;
+      max-width: 220px;
+      background: var(--primary-color);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px 10px;
+    }
+    .sidebar h2 {
+      margin-bottom: 40px;
+    }
+    .sidebar button {
+      width: 100%;
+      background: var(--accent-color);
+      color: #000;
+      border: none;
+      padding: 12px;
+      margin: 6px 0;
+      font-size: 15px;
+      border-radius: 8px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    .main-content {
+      flex-grow: 1;
+      padding: 30px;
+      overflow-y: auto;
+    }
+    section {
+      display: none;
+    }
+    section.active {
+      display: block;
+    }
+    .card {
+      background: var(--card-bg);
+      border-radius: 16px;
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #2b3d50;
+      margin-top: 10px;
+    }
+    table, th, td {
+      border: 1px solid #00d4ff;
+    }
+    th, td {
+      padding: 10px;
+      text-align: left;
+    }
+    input, textarea, select {
+      width: 100%;
+      padding: 10px;
+      margin: 10px 0;
+      border-radius: 6px;
+      border: none;
+      background: #324a5f;
+      color: #fff;
+    }
+    button.submit {
+      background: var(--accent-color);
+      padding: 10px 20px;
+      border: none;
+      border-radius: 6px;
+      font-weight: bold;
+      cursor: pointer;
+      margin-top: 10px;
+    }
+    .employee-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 20px;
+    }
+    .employee-actions button {
+      background-color: #00d4ff;
+      color: #000;
+      font-weight: bold;
+      border: none;
+      padding: 8px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.7);
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+    }
+    .modal-content {
+      background: #1e2e3e;
+      padding: 30px;
+      border-radius: 10px;
+      width: 90%;
+      max-width: 400px;
+      position: relative;
+    }
+    .modal-content h3 {
+      margin-top: 0;
+    }
+    .close-modal {
+      position: absolute;
+      top: 10px;
+      right: 15px;
+      font-size: 24px;
+      cursor: pointer;
+      color: var(--text-light);
+    }
+    .form-group label {
+      display: block;
+      margin-bottom: 5px;
+      color: var(--text-light);
+      font-weight: 600;
+    }
+    .form-group select.form-control,
+    .form-group input.form-control {
+      width: 100%;
+      padding: 10px;
+      margin-bottom: 10px;
+      border-radius: 6px;
+      border: none;
+      background: #324a5f;
+      color: #fff;
+    }
+    #city .city-actions button {
+      background-color: var(--accent-color);
+      color: #000;
+      font-weight: bold;
+      border: none;
+      padding: 10px 15px;
+      border-radius: 6px;
+      cursor: pointer;
+      margin-right: 10px;
+    }
+    #city .city-actions button.add-city {
+      background-color: #28a745;
+      color: #fff;
+    }
+    #city .city-actions button.search-city {
+      background-color: #007bff;
+      color: #fff;
+    }
+    #profile form label {
+      display: block;
+      margin-top: 10px;
+      margin-bottom: 5px;
+      color: var(--text-light);
+      font-weight: 600;
+    }
+    #profile form input[type="text"],
+    #profile form input[type="email"],
+    #profile form input[type="password"],
+    #profile form input[type="file"] {
+      width: 100%;
+      padding: 10px;
+      margin-bottom: 15px;
+      border-radius: 6px;
+      border: none;
+      background: #324a5f;
+      color: #fff;
+    }
+    #profile .password-input-container {
+      position: relative;
+      width: 100%;
+    }
+    #profile .password-input-container input {
+      padding-right: 40px;
+    }
+    #profile .password-input-container .toggle-password {
+      position: absolute;
+      right: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      cursor: pointer;
+      color: #aaa;
+    }
+    #profile button.signup-button {
+      background-color: #28a745;
+      color: #fff;
+      padding: 12px 20px;
+      border: none;
+      border-radius: 8px;
+      font-weight: bold;
+      cursor: pointer;
+      width: 100%;
+      margin-top: 20px;
+      font-size: 16px;
+    }
+    .profile-photo-container {
+      margin-bottom: 20px;
+      text-align: center;
+    }
+    #profile-preview {
+      width: 100px;
+      height: 100px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 3px solid var(--accent-color);
+      margin-bottom: 10px;
+    }
+    .sidebar .profile-photo {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 2px solid var(--accent-color);
+      margin-bottom: 10px;
+    }
+    .sidebar .profile-details {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    .sidebar .profile-details p {
+      margin: 2px 0;
+      font-size: 0.9em;
+      color: var(--text-light);
+    }
+    #state .card {
+      background: var(--card-bg);
+      border-radius: 16px;
+      padding: 20px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    }
+    #state .form-group input,
+    #state .form-group select {
+      background: #324a5f;
+      color: #fff;
+      border: none;
+    }
+    #state button[type="submit"] {
+      background: #28a745;
+      color: #fff;
+    }
+    #state button[type="button"] {
+      background: #007bff;
+      color: #fff;
+    }
+    #state table {
+      background: #2b3d50;
+    }
+    #state table th {
+      background: #324a5f;
+      color: var(--text-light);
+    }
+    #state table,
+    #state table th,
+    #state table td {
+      border: 1px solid #00d4ff;
+    }
+    #customAlertModal, #customConfirmModal {
+        display: none;
+        position: fixed;
+        z-index: 1001;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        overflow: auto;
+        background-color: rgba(0,0,0,0.4);
+        justify-content: center;
+        align-items: center;
+    }
+    #customAlertModal .modal-content, #customConfirmModal .modal-content {
+        background-color: #1e2e3e;
+        margin: auto;
+        padding: 20px;
+        border: 1px solid #888;
+        width: 80%;
+        max-width: 300px;
+        border-radius: 10px;
+        text-align: center;
+        box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2), 0 6px 20px 0 rgba(0,0,0,0.19);
+    }
+    #customAlertModal .modal-content button, #customConfirmModal .modal-content button {
+        background-color: var(--accent-color);
+        color: #000;
+        padding: 10px 20px;
+        margin: 5px;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        font-weight: bold;
+    }
+    .sync-status {
+      position: fixed;
+      bottom: 10px;
+      right: 10px;
+      padding: 8px 15px;
+      border-radius: 20px;
+      font-size: 0.9em;
+      font-weight: bold;
+      z-index: 100;
+    }
+    .sync-status.online {
+      background-color: #28a745;
+      color: white;
+    }
+    .sync-status.offline {
+      background-color: #dc3545;
+      color: white;
+    }
+    .sync-status.syncing {
+      background-color: #ffc107;
+      color: black;
+    }
+/* Responsive layout: stack sidebar above content on small screens */
+@media (max-width: 768px) {
+  body {
+    flex-direction: column;
+  }
+  .sidebar {
+    max-width: 100%;
+    width: 100%;
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: space-around;
+    padding: 10px;
+  }
+  .sidebar h2 {
+    width: 100%;
+    text-align: center;
+    margin-bottom: 10px;
+  }
+  .sidebar button {
+    flex: 1 1 45%;
+    margin: 5px;
+  }
+  .sidebar .profile-photo,
+  .sidebar .profile-details {
+    display: none;
+  }
+  .main-content {
+    padding: 15px;
+  }
+  .card {
+    padding: 15px;
+  }
+  table, thead, tbody, th, td, tr {
+    display: block;
+  }
+  table {
+    border: none;
+  }
+  table thead {
+    display: none;
+  }
+  table tr {
+    margin-bottom: 15px;
+    border: 1px solid #00d4ff;
+    border-radius: 8px;
+    padding: 10px;
+    background: #2b3d50;
+  }
+  table td {
+    position: relative;
+    padding-left: 50%;
+    text-align: left;
+  }
+  table td::before {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    width: 45%;
+    white-space: nowrap;
+    font-weight: bold;
+    color: var(--accent-color);
+  }
+  #daily-activity-table-body td:nth-of-type(1)::before { content: "Employee ID:"; }
+  #daily-activity-table-body td:nth-of-type(2)::before { content: "Name:"; }
+  #daily-activity-table-body td:nth-of-type(3)::before { content: "Type:"; }
+  #daily-activity-table-body td:nth-of-type(4)::before { content: "Date & Time:"; }
+  #daily-activity-table-body td:nth-of-type(5)::before { content: "Location:"; }
+  #daily-activity-table-body td:nth-of-type(6)::before { content: "Latitude:"; }
+  #daily-activity-table-body td:nth-of-type(7)::before { content: "Longitude:"; }
+  #daily-activity-table-body td:nth-of-type(8)::before { content: "Map:"; }
+  #daily-activity-table-body td:nth-of-type(9)::before { content: "Details:"; }
+  #followup-table td:nth-of-type(1)::before { content: "Employee ID:"; }
+  #followup-table td:nth-of-type(2)::before { content: "Name:"; }
+  #followup-table td:nth-of-type(3)::before { content: "Subject:"; }
+  #followup-table td:nth-of-type(4)::before { content: "Date & Time:"; }
+  #followup-table td:nth-of-type(5)::before { content: "Note:"; }
+  #followup-table td:nth-of-type(6)::before { content: "Actions:"; }
+  #state-table td:nth-of-type(1)::before { content: "State:"; }
+  #state-table td:nth-of-type(2)::before { content: "Actions:"; }
+  #city-table td:nth-of-type(1)::before { content: "State:"; }
+  #city-table td:nth-of-type(2)::before { content: "City:"; }
+  #city-table td:nth-of-type(3)::before { content: "Actions:"; }
+  #employee-details-table td:nth-of-type(1)::before { content: "Employee ID:"; }
+  #employee-details-table td:nth-of-type(2)::before { content: "Name:"; }
+  #employee-details-table td:nth-of-type(3)::before { content: "Mobile No:"; }
+  #employee-details-table td:nth-of-type(4)::before { content: "Email:"; }
+  #employee-details-table td:nth-of-type(5)::before { content: "Actions:"; }
+  #admin-details-table td:nth-of-type(1)::before { content: "Employee ID:"; }
+  #admin-details-table td:nth-of-type(2)::before { content: "Name:"; }
+  #admin-details-table td:nth-of-type(3)::before { content: "Mobile No:"; }
+  #admin-details-table td:nth-of-type(4)::before { content: "Email:"; }
+  #admin-details-table td:nth-of-type(5)::before { content: "Actions:"; }
+  #daily-activity-table-body img {
+    vertical-align: middle;
+    margin-right: 5px;
+  }
+}
+  </style>
+</head>
+<body>
+  <div class="sidebar">
+    <h2>🚀 Tracker</h2>
+    <img id="sidebar-profile-photo" class="profile-photo" src="https://storage.googleapis.com/workspace-0f70711f-8b4e-4d94-86f1-2a93ccde5887/image/b480eacc-40ca-4251-4c52-b6c5587b3aa7.png" alt="Profile Photo">
+    <div class="profile-details">
+      <p id="sidebar-employee-name">Employee Name</p>
+      <p id="sidebar-employee-id">EMP-ID</p>
+    </div>
+    <button onclick="showSection('dashboard')">Dashboard</button>
+    <button onclick="showSection('daily-activity')">Daily Activity</button>
+    <button onclick="showSection('followups')">Follow Ups</button>
+    <button onclick="showSection('profile')">User Profile</button>
+    <button onclick="showSection('employee-management')" id="employeeManagementBtn" style="display:none;">Employee Management</button>
+    <button onclick="showSection('admin-profile')" id="adminProfileBtn" style="display:none;">Admin Profile</button>
+    <button onclick="confirmLogout()" id="logoutBtn" style="display:none;">Logout</button>
+    <button onclick="showSection('login')" id="loginBtn">Login</button>
+  </div>
+  <div class="main-content">
+    <section id="login" class="active">
+        <div class="card">
+            <h2>Login</h2>
+            <form id="login-form">
+                <div class="form-group" id="employee-id-group">
+                    <label for="login-employee-id">Employee ID</label>
+                    <input type="text" id="login-employee-id" class="form-control" placeholder="Enter your Employee ID" required>
+                </div>
+                <div class="form-group" id="admin-username-group" style="display: none;">
+                    <label for="login-admin-username">Admin Username</label>
+                    <input type="text" id="login-admin-username" class="form-control" placeholder="Enter Admin Username (e.g., ADM-YourName)">
+                </div>
+                <div class="form-group" id="mobile-number-group">
+                    <label for="login-mobile-number">Mobile Number</label>
+                    <input type="tel" id="login-mobile-number" class="form-control" placeholder="Enter your mobile number" required>
+                </div>
+                <div class="form-group" id="password-group" style="display: none;">
+                    <label for="login-password">Password</label>
+                    <input type="password" id="login-password" class="form-control" placeholder="Enter your password">
+                </div>
+                <div class="form-group">
+                    <label for="login-role">Select Role</label>
+                    <select id="login-role" class="form-control" required>
+                        <option value="">-- Select Role --</option>
+                        <option value="employee">Employee</option>
+                        <option value="admin">Admin</option>
+                    </select>
+                </div>
+                <button type="submit" class="submit">Login</button>
+            </form>
+        </div>
+    </section>
+    <section id="dashboard">
+      <div class="card">
+        <h2 id="dashboard-welcome-message">Dashboard</h2>
+        <ul>
+          <li><strong>Mark Attendance:</strong> Easily clock in and out with a single tap.</li>
+          <li><strong>Daily Visit Records:</strong> Log your client or field visits.</li>
+          <li><strong>Follow Ups:</strong> Manage daily follow-ups with reminders.</li>
+        </ul>
+      </div>
+    </section>
+    <section id="daily-activity">
+      <div class="card">
+        <h2>📅 DAILY ACTIVITY</h2>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+            <div>
+                <label for="activity-date-filter">Date:</label>
+                <input type="date" id="activity-date-filter" style="max-width: 150px;" onchange="loadDailyActivity()">
+            </div>
+            <div id="employee-filter-container" style="display:none;">
+                <label for="activity-employee-filter">Employee:</label>
+                <select id="activity-employee-filter" style="max-width: 150px;" onchange="loadDailyActivity()">
+                    <!-- Employee IDs will be loaded here for admin -->
+                </select>
+            </div>
+            <div>
+                <label for="activity-search">🔍 Search:</label>
+                <input type="text" id="activity-search" placeholder="Employee name / EmployeeId" style="max-width: 150px;" onkeyup="loadDailyActivity()">
+            </div>
+        </div>
+        <div class="employee-actions">
+          <button onclick="markCheckIn()" id="checkInBtn">Check In</button>
+          <button onclick="markCheckOut()" id="checkOutBtn">Check Out</button>
+          <button onclick="exportToExcel('daily-activity')">Export All</button>
+        </div>
+        <div id="location-tracking-status" style="margin: 10px 0; font-weight: bold;">
+            📍 Location Status: <span id="location-status-text">Inactive</span>
+        </div>
+        <div id="current-location" style="margin-bottom: 20px;">
+            <div style="display: flex; gap: 20px;">
+                <div style="flex: 1;">
+                    <strong>Address:</strong> <span id="current-address">Waiting for location...</span><br>
+                    <strong>Latitude:</strong> <span id="latitude">N/A</span><br>
+                    <strong>Longitude:</strong> <span id="longitude">N/A</span><br>
+                    <strong>Accuracy:</strong> <span id="accuracy">N/A</span> meters
+                </div>
+                <div id="map-container" style="flex: 1; height: 200px; border: 1px solid #00d4ff;">
+                    <div id="leaflet-map" style="height: 100%;"></div>
+                </div>
+            </div>
+        </div>
+        <h3>──────────────────── Merged Log Table ────────────────────</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Employee ID</th>
+              <th>Name</th>
+              <th>Type</th>
+              <th>Date & Time</th>
+              <th>Location</th>
+              <th>Latitude</th>
+              <th>Longitude</th>
+              <th>Map</th>
+              <th>Details</th>
+            </tr>
+          </thead>
+          <tbody id="daily-activity-table-body">
+            <!-- Daily activity data will be loaded here -->
+          </tbody>
+        </table>
+      </div>
+    </section>
+    <section id="followups">
+      <div class="card">
+        <h2>Follow Ups</h2>
+        <div class="employee-actions">
+          <button onclick="addFollowUpEntry()">Add Follow-Up</button>
+          <button onclick="exportToExcel('followups')">Export to Excel</button>
+        </div>
+        <form id="followup-form">
+          <input type="text" id="followup-subject" placeholder="Subject / Client Name" required>
+          <input type="datetime-local" id="followup-datetime" required>
+          <textarea id="followup-note" placeholder="Reminder Note"></textarea>
+          <button type="submit" class="submit">Save Follow-Up</button>
+        </form>
+        <table style="margin-top:20px">
+          <thead>
+            <tr>
+              <th id="followup-employee-id-header" style="display:none;">Employee ID</th>
+              <th id="followup-employee-name-header" style="display:none;">Name</th>
+              <th>Subject</th>
+              <th>Date & Time</th>
+              <th>Note</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="followup-table">
+            <!-- Follow-up data will be loaded here -->
+          </tbody>
+        </table>
+      </div>
+    </section>
+    <section id="state">
+      <div class="card">
+        <h2>State Management</h2>
+        <form id="state-form">
+          <div class="form-group">
+            <label for="state-name">State Name</label>
+            <input type="text" id="state-name" placeholder="Enter State Name" required class="form-control">
+          </div>
+          <button type="submit" class="submit">Add State</button>
+        </form>
+        <button onclick="exportToExcel('state')" class="submit" style="margin-top: 10px;">Export to Excel</button>
+        <input type="text" id="search-state" placeholder="Search State" class="form-control" style="margin-top: 20px;" onkeyup="searchState()">
+        <table>
+          <thead>
+            <tr>
+              <th>State</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="state-table">
+            <!-- State data will be loaded here -->
+          </tbody>
+        </table>
+      </div>
+    </section>
+    <section id="city">
+      <div class="card">
+        <h2>City Management</h2>
+        <form id="city-form">
+          <div class="form-group">
+            <label for="state-select">Select State</label>
+            <select id="state-select" class="form-control" required>
+              <option value="">-- Select State --</option>
+              <!-- States will be loaded dynamically here -->
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="city-name">City Name</label>
+            <input type="text" id="city-name" class="form-control" placeholder="Enter City Name" required>
+          </div>
+          <button type="submit" class="submit">Add City</button>
+        </form>
+        <button onclick="exportToExcel('city')" class="submit" style="margin-top: 10px;">Export to Excel</button>
+        <input type="text" id="search-city" placeholder="Search City" class="form-control" style="margin-top: 20px;" onkeyup="searchCity()">
+        <table style="margin-top:20px">
+          <thead>
+            <tr>
+              <th>State</th>
+              <th>City</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="city-table">
+            <!-- City data will be loaded here -->
+          </tbody>
+        </table>
+      </div>
+    </section>
+    <section id="profile">
+      <div class="card">
+        <h2>User Profile</h2>
+        <form id="profile-form">
+          <div class="profile-photo-container">
+            <img id="profile-preview" src="https://storage.googleapis.com/workspace-0f70711f-8b4e-4d94-86f1-2a93ccde5887/image/99a20669-ecb4-4325-a970-491b8dac39a9.png" alt="Profile Photo Preview">
+            <label for="upload-photo" style="cursor: pointer; display: block; margin-top: 10px;">Upload Photo</label>
+            <input type="file" id="upload-photo" accept="image/*" style="display: none;">
+          </div>
+          <label for="profile-name">Name</label>
+          <input type="text" id="profile-name" placeholder="Enter Your Name">
+          <label for="profile-employee-id">Employee ID</label>
+          <input type="text" id="profile-employee-id" placeholder="Enter your Employee ID" readonly>
+          <label for="profile-mobile-no">Mobile No</label>
+          <input type="text" id="profile-mobile-no" placeholder="Enter your mobile no">
+          <label for="profile-email-id">Email Id</label>
+          <input type="email" id="profile-email-id" placeholder="Email">
+          <label for="profile-password">Password</label>
+          <div class="password-input-container">
+            <input type="password" id="profile-password" placeholder="Password">
+            <span class="toggle-password" onclick="togglePasswordVisibility()">&#128065;</span> </div>
+          <button type="submit" class="signup-button">Save Profile</button>
+        </form>
+      </div>
+    </section>
+    <section id="admin-profile">
+        <div class="card">
+            <h2>Admin Profile Details</h2>
+            <div class="employee-actions">
+                <button onclick="openAddAdminModal()">Add Admin</button>
+            </div>
+            <table style="margin-top:20px">
+                <thead>
+                    <tr>
+                        <th>Employee ID</th>
+                        <th>Name</th>
+                        <th>Mobile No</th>
+                        <th>Email</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="admin-details-table">
+                    <!-- Admin data will be loaded here -->
+                </tbody>
+            </table>
+        </div>
+    </section>
+    <section id="employee-management">
+        <div class="card">
+            <h2>Employee Details</h2>
+            <div class="employee-actions">
+                <button onclick="openAddEmployeeModal()">Add Employee</button>
+                <button onclick="exportToExcel('employee-management')" class="submit">Export to Excel</button>
+            </div>
+            <table style="margin-top:20px">
+                <thead>
+                    <tr>
+                        <th>Employee ID</th>
+                        <th>Name</th>
+                        <th>Mobile No</th>
+                        <th>Email</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="employee-details-table">
+                    <!-- Employee data will be loaded here -->
+                </tbody>
+            </table>
+        </div>
+    </section>
+  </div>
+  <!-- Log Visit Modal -->
+  <div id="logVisitModal" class="modal">
+    <div class="modal-content">
+      <h3>📝 Log Visit?</h3>
+      <form id="log-visit-form">
+        <input type="hidden" id="log-visit-checkin-id">
+        <label for="log-visit-client">Client Name:</label>
+        <input type="text" id="log-visit-client" placeholder="Client/Company Name" required>
+        <label for="log-visit-purpose">Visit Purpose:</label>
+        <textarea id="log-visit-purpose" placeholder="Purpose / Notes" required></textarea>
+        <label for="log-visit-location">Visit Location:</label>
+        <input type="text" id="log-visit-location" placeholder="Visit Location" required>
+        <div style="display: flex; justify-content: center; margin-top: 20px;">
+            <button type="submit" class="submit">✔️ Submit Visit</button>
+            <button type="button" class="submit" style="background-color: #f44336; margin-left: 10px;" onclick="skipVisit()">Skip Visit</button>
+        </div>
+      </form>
+    </div>
+  </div>
+  <!-- Custom Alert Modal -->
+  <div id="customAlertModal" class="modal">
+    <div class="modal-content">
+      <p id="alertMessage"></p>
+      <button onclick="closeAlert()">OK</button>
+    </div>
+  </div>
+  <!-- Custom Confirm Modal -->
+  <div id="customConfirmModal" class="modal">
+    <div class="modal-content">
+      <p id="confirmMessage"></p>
+      <button id="confirmYes">Yes</button>
+      <button id="confirmNo">No</button>
+    </div>
+  </div>
+  <!-- Add Employee Modal -->
+  <div id="addEmployeeModal" class="modal">
+    <div class="modal-content">
+      <span class="close-modal" onclick="closeAddEmployeeModal()">&times;</span>
+      <h3>Add New Employee</h3>
+      <form id="add-employee-form">
+        <div class="form-group">
+          <label for="new-employee-id">Employee ID (SCS-XXXXXX)</label>
+          <input type="text" id="new-employee-id" pattern="SCS-\d{5,6}" placeholder="SCS-12345 or SCS-123456" title="Format: SCS- followed by 5 or 6 digits" required>
+        </div>
+        <div class="form-group">
+          <label for="new-employee-name">Full Name</label>
+          <input type="text" id="new-employee-name" placeholder="John Doe" required>
+        </div>
+        <div class="form-group">
+          <label for="new-employee-mobile">Mobile No</label>
+          <input type="tel" id="new-employee-mobile" placeholder="9876543210" required>
+        </div>
+        <div class="form-group">
+          <label for="new-employee-email">Email</label>
+          <input type="email" id="new-employee-email" placeholder="john@example.com" required>
+        </div>
+        <div class="form-group">
+          <label for="new-employee-password">Password</label>
+          <input type="password" id="new-employee-password" placeholder="Set password" required>
+        </div>
+        <button type="submit" class="submit">Save Employee</button>
+      </form>
+    </div>
+  </div>
+  <!-- Add Admin Modal -->
+  <div id="addAdminModal" class="modal">
+    <div class="modal-content">
+      <span class="close-modal" onclick="closeAddAdminModal()">&times;</span>
+      <h3>Add New Admin</h3>
+      <form id="add-admin-form">
+        <div class="form-group">
+          <label for="new-admin-username">Admin Username (ADM-YourName)</label>
+          <input type="text" id="new-admin-username" pattern="ADM-[A-Za-z\s]+" placeholder="ADM-JohnDoe" title="Format: ADM- followed by letters and spaces" required>
+        </div>
+        <div class="form-group">
+          <label for="new-admin-name">Full Name</label>
+          <input type="text" id="new-admin-name" placeholder="John Doe" required>
+        </div>
+        <div class="form-group">
+          <label for="new-admin-mobile">Mobile No</label>
+          <input type="tel" id="new-admin-mobile" placeholder="9876543210">
+        </div>
+        <div class="form-group">
+          <label for="new-admin-email">Email</label>
+          <input type="email" id="new-admin-email" placeholder="john@example.com">
+        </div>
+        <div class="form-group">
+          <label for="new-admin-password">Password</label>
+          <input type="password" id="new-admin-password" placeholder="Set password" required>
+        </div>
+        <button type="submit" class="submit">Save Admin</button>
+      </form>
+    </div>
+  </div>
+  
+  <!-- Sync Status Indicator -->
+  <div id="syncStatus" class="sync-status online">Online</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script>
+  // Global variables for user state
+  let currentUserRole = null; // 'admin' or 'employee'
+  let currentEmployeeId = null; // The ID of the logged-in employee
+  
+  // Configuration for backend integration
+  const CONFIG = {
+    API_BASE: "https://tracker-web-app-backend.onrender.com",
+    USE_REMOTE: true,
+  };
+  
+  let TOKEN = localStorage.getItem('tracker_token') || null;
+  let socket = null;
+  
+  // API wrapper for backend calls
+  const TrackerAPI = {
+    async login(credentials) {
+      const body = {
+        employeeId: credentials.employeeIdInput || credentials.adminUsernameInput,
+        mobile: credentials.mobileNumberInput,
+        email: credentials.employeeIdInput ? `${credentials.employeeIdInput}@example.com` : `${credentials.adminUsernameInput}@example.com`,
+        password: credentials.passwordInput
+      };
+      
+      try {
+        const response = await fetch(`${CONFIG.API_BASE}/api/auth/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || 'Login failed');
+        }
+        
+        const data = await response.json();
+        TOKEN = data.token;
+        localStorage.setItem('tracker_token', TOKEN);
+        return data;
+      } catch (error) {
+        console.error('Backend login error:', error);
+        throw error;
+      }
+    },
+    
+    async getDailyActivityRecords() {
+      if (!TOKEN) throw new Error('Not authenticated');
+      
+      try {
+        const response = await fetch(`${CONFIG.API_BASE}/api/activities`, {
+          headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        
+        if (!response.ok) {
+          throw new Error('Failed to fetch activities');
+        }
+        
+        const data = await response.json();
+        
+        // Transform backend data to frontend format
+        return data.activities.map(act => ({
+          id: act.id,
+          employeeId: act.employeeId,
+          timestamp: act.timestamp,
+          type: act.type,
+          location: act.location,
+          latitude: act.latitude,
+          longitude: act.longitude,
+          mapLink: act.mapLink,
+          details: act.details
+        }));
+      } catch (error) {
+        console.error('Error fetching activities:', error);
+        throw error;
+      }
+    },
+    
+    async saveDailyActivityRecords(records) {
+      if (!TOKEN) throw new Error('Not authenticated');
+      
+      try {
+        for (const record of records) {
+          await fetch(`${CONFIG.API_BASE}/api/activities`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${TOKEN}`
+            },
+            body: JSON.stringify({
+              type: record.type,
+              details: record.details,
+              latitude: record.location?.lat || record.latitude,
+              longitude: record.location?.lng || record.longitude,
+              address: record.location?.address || record.location
+            })
+          });
+        }
+        return true;
+      } catch (e) {
+        console.error('Failed to save activity record', e);
+        throw e;
+      }
+    },
+    
+    async getFollowUps() {
+      if (!TOKEN) throw new Error('Not authenticated');
+      
+      try {
+        const response = await fetch(`${CONFIG.API_BASE}/api/followups`, {
+          headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        
+        if (!response.ok) {
+          throw new Error('Failed to fetch followups');
+        }
+        
+        const data = await response.json();
+        
+        return data.followups.map(f => ({
+          id: f.id,
+          employeeId: f.employeeId,
+          subject: f.subject,
+          datetime: f.datetime,
+          note: f.note,
+          createdAt: f.createdAt
+        }));
+      } catch (error) {
+        console.error('Error fetching followups:', error);
+        throw error;
+      }
+    },
+    
+    async saveFollowUps(followups) {
+      if (!TOKEN) throw new Error('Not authenticated');
+      
+      try {
+        for (const followup of followups) {
+          await fetch(`${CONFIG.API_BASE}/api/followups`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${TOKEN}`
+            },
+            body: JSON.stringify({
+              subject: followup.subject,
+              note: followup.note,
+              datetime: followup.datetime
+            })
+          });
+        }
+        return true;
+      } catch (e) {
+        console.error('Failed to save followup', e);
+        throw e;
+      }
+    },
+    
+    async getStates() {
+      if (!TOKEN) throw new Error('Not authenticated');
+      
+      try {
+        const response = await fetch(`${CONFIG.API_BASE}/api/states`, {
+          headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        
+        if (!response.ok) {
+          throw new Error('Failed to fetch states');
+        }
+        
+        const data = await response.json();
+        
+        return data.states.map(s => ({
+          id: s.id,
+          name: s.name,
+          createdAt: s.createdAt
+        }));
+      } catch (error) {
+        console.error('Error fetching states:', error);
+        throw error;
+      }
+    },
+    
+    async saveStates(states) {
+      if (!TOKEN) throw new Error('Not authenticated');
+      
+      try {
+        for (const state of states) {
+          await fetch(`${CONFIG.API_BASE}/api/states`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${TOKEN}`
+            },
+            body: JSON.stringify({
+              name: state.name
+            })
+          });
+        }
+        return true;
+      } catch (e) {
+        console.error('Failed to save state', e);
+        throw e;
+      }
+    },
+    
+    async getCities() {
+      if (!TOKEN) throw new Error('Not authenticated');
+      
+      try {
+        const response = await fetch(`${CONFIG.API_BASE}/api/cities`, {
+          headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        
+        if (!response.ok) {
+          throw new Error('Failed to fetch cities');
+        }
+        
+        const data = await response.json();
+        
+        return data.cities.map(c => ({
+          id: c.id,
+          stateId: c.stateId,
+          stateName: c.stateName,
+          name: c.name,
+          createdAt: c.createdAt
+        }));
+      } catch (error) {
+        console.error('Error fetching cities:', error);
+        throw error;
+      }
+    },
+    
+    async saveCities(cities) {
+      if (!TOKEN) throw new Error('Not authenticated');
+      
+      try {
+        for (const city of cities) {
+          await fetch(`${CONFIG.API_BASE}/api/cities`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${TOKEN}`
+            },
+            body: JSON.stringify({
+              stateId: city.stateId,
+              name: city.name
+            })
+          });
+        }
+        return true;
+      } catch (e) {
+        console.error('Failed to save city', e);
+        throw e;
+      }
+    },
+    
+    async getUsers() {
+      if (!TOKEN) throw new Error('Not authenticated');
+      
+      try {
+        const response = await fetch(`${CONFIG.API_BASE}/api/users`, {
+          headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        
+        if (!response.ok) {
+          throw new Error('Failed to fetch users');
+        }
+        
+        const data = await response.json();
+        
+        return data.users.map(u => ({
+          employeeId: u.employee_id,
+          name: u.name,
+          mobileNo: u.mobile,
+          emailId: u.email,
+          role: u.role,
+          id: u.id
+        }));
+      } catch (error) {
+        console.error('Error fetching users:', error);
+        throw error;
+      }
+    },
+    
+    async createUser(user) {
+      if (!TOKEN) throw new Error('Not authenticated');
+      
+      try {
+        const response = await fetch(`${CONFIG.API_BASE}/api/users`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${TOKEN}`
+          },
+          body: JSON.stringify({
+            role: user.role,
+            name: user.name,
+            email: user.emailId,
+            mobile: user.mobileNo,
+            employeeId: user.employeeId,
+            password: user.password
+          })
+        });
+        
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || 'Failed to create user');
+        }
+        
+        const data = await response.json();
+        return data.user;
+      } catch (error) {
+        console.error('Error creating user:', error);
+        throw error;
+      }
+    },
+    
+    async syncData() {
+      if (!TOKEN) throw new Error('Not authenticated');
+      
+      try {
+        // Get all data from backend
+        const [activities, followups, states, cities, users] = await Promise.all([
+          this.getDailyActivityRecords(),
+          this.getFollowUps(),
+          this.getStates(),
+          this.getCities(),
+          this.getUsers()
+        ]);
+        
+        // Update localStorage with backend data
+        localStorage.setItem('dailyActivityRecords', JSON.stringify(activities));
+        localStorage.setItem('followUps', JSON.stringify(followups));
+        localStorage.setItem('states', JSON.stringify(states));
+        localStorage.setItem('cities', JSON.stringify(cities));
+        
+        // Update user profiles
+        users.forEach(user => {
+          const profile = {
+            employeeId: user.employeeId,
+            name: user.name,
+            mobileNo: user.mobile,
+            emailId: user.email,
+            password: '', // Don't store password in localStorage
+            photoUrl: 'https://storage.googleapis.com/workspace-0f70711f-8b4e-4d94-86f1-2a93ccde5887/image/default-employee.png'
+          };
+          localStorage.setItem(`userProfile_${user.employeeId}`, JSON.stringify(profile));
+        });
+        
+        return { success: true };
+      } catch (e) {
+        console.error('Failed to sync data', e);
+        throw e;
+      }
+    }
+  };
+  
+  // Define allowed admin usernames and their common password
+  const adminCommonPassword = "scube@1234";
+  
+  // --- Pre-defined Employee Data (with Mobile Numbers from PDF) ---
+  const initialEmployeeData = [
+    { name: "Snehasish Paul", employeeId: "SCS-03318", mobileNo: "8017892062", emailId: "N/A", password: "scube@4321", photoUrl: 'https://storage.googleapis.com/workspace-0f70711f-8b4e-4d94-86f1-2a93ccde5887/image/default-employee.png' },
+    { name: "Zuber Alam", employeeId: "SCS-01102", mobileNo: "9891377424", emailId: "N/A", password: "scube@4321", photoUrl: 'https://storage.googleapis.com/workspace-0f70711f-8b4e-4d94-86f1-2a93ccde5887/image/default-employee.png' },
+    { name: "Bharath Kumar TM", employeeId: "SCS-08017", mobileNo: "9844722312", emailId: "N/A", password: "scube@4321", photoUrl: 'https://storage.googleapis.com/workspace-0f70711f-8b4e-4d94-86f1-2a93ccde5887/image/default-employee.png' },
+    { name: "Shiva Kumarar", employeeId: "SCS-08016", mobileNo: "9611452782", emailId: "N/A", password: "scube@4321", photoUrl: 'https://storage.googleapis.com/workspace-0f70711f-8b4e-4d94-86f1-2a93ccde5887/image/default-employee.png' },
+    { name: "Tapas Kumar Dinda", employeeId: "SCS-03317", mobileNo: "9804443387", emailId: "N/A", password: "scube@4321", photoUrl: 'https://storage.googleapis.com/workspace-0f70711f-8b4e-4d94-86f1-2a93ccde5887/image/default-employee.png' },
+    { name: "Gopal Chandra Biswas", employeeId: "SCS-03313", mobileNo: "9432095612", emailId: "N/A", password: "scube@4321", photoUrl: 'https://storage.googleapis.com/workspace-0f70711f-8b4e-4d94-86f1-2a93ccde5887/image/default-employee.png' },
+    { name: "Saugat Majumdar", employeeId: "SCS-03303", mobileNo: "9831259094", emailId: "N/A", password: "scube@4321", photoUrl: 'https://storage.googleapis.com/workspace-0f70711f-8b4e-4d94-86f1-2a93ccde5887/image/default-employee.png' },
+    { name: "Chitrarath Senapati", employeeId: "SCS-03306", mobileNo: "9831282190", emailId: "N/A", password: "scube@4321", photoUrl: 'https://storage.googleapis.com/workspace-0f70711f-8b4e-4d94-86f1-2a93ccde5887/image/default-employee.png' },
+    { name: "Sukhendu Shekhar Mondal", employeeId: "SCS-03316", mobileNo: "7278942388", emailId: "N/A", password: "scube@4321", photoUrl: 'https://storage.googleapis.com/workspace-0f70711f-8b4e-4d94-86f1-2a93ccde5887/image/default-employee.png' },
+    { name: "Tarun Kumar Paramanik", employeeId: "SCS-03308", mobileNo: "9831650969", emailId: "N/A", password: "scube@4321", photoUrl: 'https://storage.googleapis.com/workspace-0f70711f-8b4e-4d94-86f1-2a93ccde5887/image/default-employee.png' },
+    { name: "Kartik Ghanta", employeeId: "SCS-03309", mobileNo: "7074099074", emailId: "N/A", password: "scube@4321", photoUrl: 'https://storage.googleapis.com/workspace-0f70711f-8b4e-4d94-86f1-2a93ccde5887/image/default-employee.png' },
+    { name: "Provat Naskar", employeeId: "SCS-03314", mobileNo: "7044486602", emailId: "N/A", password: "scube@4321", photoUrl: 'https://storage.googleapis.com/workspace-0f70711f-8b4e-4d94-86f1-2a93ccde5887/image/default-employee.png' },
+    { name: "Ravi", employeeId: "SCS-01103", mobileNo: "9548362042", emailId: "N/A", password: "scube@4321", photoUrl: 'https://storage.googleapis.com/workspace-0f70711f-8b4e-4d94-86f1-2a93ccde5887/image/default-employee.png' },
+    { name: "Abhilash Sarangi", employeeId: "SCS-067403", mobileNo: "8763523636", emailId: "N/A", password: "scube@4321", photoUrl: 'https://storage.googleapis.com/workspace-0f70711f-8b4e-4d94-86f1-2a93ccde5887/image/default-employee.png' },
+    { name: "Shubhadarshani Nath", employeeId: "SCS-067404", mobileNo: "7978143152", emailId: "N/A", password: "scube@4321", photoUrl: 'https://storage.googleapis.com/workspace-0f70711f-8b4e-4d94-86f1-2a93ccde5887/image/default-employee.png' }
+  ];
+  
+  // --- Pre-defined Admin Data (with Mobile Numbers from PDF) ---
+  const initialAdminData = [
+    { adminId: "ADM-S.S Singh", name: "Shanti Saran Singh", mobileNo: "9831038262" },
+    { adminId: "ADM-Sandeep", name: "Sandeep Sarkar", mobileNo: "9831036858" },
+    { adminId: "ADM-Snehashis", name: "Snehashis Saha", mobileNo: "9330199588" },
+    { adminId: "ADM-Komal", name: "Komal Gupta", mobileNo: "7003045682" },
+    { adminId: "ADM-Shoaib", name: "MD Shoaib Raza", mobileNo: "9831259095" }
+  ];
+  
+  // List of allowed admin usernames (for password check)
+  const allowedAdminUsernames = initialAdminData.map(admin => admin.adminId);
+  
+  // Initial load - show login screen
+  document.addEventListener('DOMContentLoaded', () => {
+    // Pre-populate employee data if not already present in localStorage
+    initialEmployeeData.forEach(emp => {
+        if (!localStorage.getItem(`userProfile_${emp.employeeId}`)) {
+            saveUserProfile(emp); // Use the existing saveUserProfile function
+            console.log(`Pre-populated profile for employee: ${emp.employeeId}`);
+        }
+    });
+    
+    // Pre-populate admin data and always overwrite to avoid corruption
+    initialAdminData.forEach(admin => {
+        const adminProfile = {
+            employeeId: admin.adminId,
+            name: admin.name,
+            mobileNo: admin.mobileNo,
+            emailId: 'N/A',
+            password: adminCommonPassword,
+            photoUrl: 'https://storage.googleapis.com/workspace-0f70711f-8b4e-4d94-86f1-2a93ccde5887/image/default-employee.png'
+        };
+        localStorage.setItem(`userProfile_${admin.adminId}`, JSON.stringify(adminProfile));
+        console.log(`Force-loaded admin profile: ${admin.adminId}`);
+    });
+    
+    // Check for persistent login session
+    const lastLoggedInRole = localStorage.getItem('lastLoggedInRole');
+    const lastLoggedInEmployeeId = localStorage.getItem('lastLoggedInEmployeeId');
+    if (lastLoggedInRole && lastLoggedInEmployeeId) {
+        currentUserRole = lastLoggedInRole;
+        currentEmployeeId = lastLoggedInEmployeeId;
+        // Retrieve the full profile to update sidebar details correctly
+        const userProfile = getUserProfile(currentEmployeeId);
+        updateSidebarProfile(userProfile.name, userProfile.employeeId, userProfile.photoUrl);
+        login(); // Call the login function to set up UI and navigate to appropriate section
+    } else {
+        showSection('login');
+        // Hide sidebar buttons until logged in
+        document.querySelectorAll('.sidebar button:not(#loginBtn)').forEach(btn => btn.style.display = 'none');
+        document.getElementById('loginBtn').style.display = 'block';
+        document.getElementById('logoutBtn').style.display = 'none';
+    }
+    
+    document.getElementById('login-role').addEventListener('change', function() {
+        const passwordGroup = document.getElementById('password-group');
+        const loginPasswordInput = document.getElementById('login-password');
+        const employeeIdGroup = document.getElementById('employee-id-group');
+        const loginEmployeeIdInput = document.getElementById('login-employee-id');
+        const adminUsernameGroup = document.getElementById('admin-username-group');
+        const loginAdminUsernameInput = document.getElementById('login-admin-username');
+        const mobileNumberGroup = document.getElementById('mobile-number-group');
+        const loginMobileNumberInput = document.getElementById('login-mobile-number');
+        
+        if (this.value === 'admin') {
+            if (employeeIdGroup) employeeIdGroup.style.display = 'none';
+            loginEmployeeIdInput.removeAttribute('required');
+            loginEmployeeIdInput.value = '';
+            adminUsernameGroup.style.display = 'block';
+            loginAdminUsernameInput.setAttribute('required', 'required');
+            mobileNumberGroup.style.display = 'block';
+            loginMobileNumberInput.setAttribute('required', 'required');
+            passwordGroup.style.display = 'block';
+            loginPasswordInput.setAttribute('required', 'required');
+        } else if (this.value === 'employee') {
+            if (employeeIdGroup) employeeIdGroup.style.display = 'block';
+            loginEmployeeIdInput.setAttribute('required', 'required');
+            loginAdminUsernameInput.removeAttribute('required');
+            loginAdminUsernameInput.value = '';
+            adminUsernameGroup.style.display = 'none';
+            mobileNumberGroup.style.display = 'block';
+            loginMobileNumberInput.setAttribute('required', 'required');
+            passwordGroup.style.display = 'block';
+            loginPasswordInput.setAttribute('required', 'required');
+        } else {
+            if (employeeIdGroup) employeeIdGroup.style.display = 'block';
+            loginEmployeeIdInput.setAttribute('required', 'required');
+            loginAdminUsernameInput.removeAttribute('required');
+            loginAdminUsernameInput.value = '';
+            adminUsernameGroup.style.display = 'none';
+            mobileNumberGroup.style.display = 'block';
+            loginMobileNumberInput.setAttribute('required', 'required');
+            passwordGroup.style.display = 'none';
+            loginPasswordInput.removeAttribute('required');
+            loginPasswordInput.value = '';
+        }
+    });
+    
+    document.getElementById('login-role').dispatchEvent(new Event('change'));
+    
+    // Setup offline detection
+    setupOfflineDetection();
+  });
+  
+  document.getElementById('login-form').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const employeeIdInput = document.getElementById('login-employee-id').value.trim();
+      const adminUsernameInput = document.getElementById('login-admin-username').value.trim();
+      const passwordInput = document.getElementById('login-password').value;
+      const mobileNumberInput = document.getElementById('login-mobile-number').value.trim();
+      const roleSelect = document.getElementById('login-role').value;
+      
+      if (!roleSelect) {
+          showAlert('Please select a Role.');
+          return;
+      }
+      
+      const loginData = { employeeIdInput, adminUsernameInput, passwordInput, mobileNumberInput, roleSelect };
+      showConfirm('Are you sure you want to log in?', (confirmed) => {
+          if (confirmed) {
+              processLogin(loginData);
+          } else {
+              showAlert('Login cancelled.');
+          }
+      });
+  });
+  
+  /**
+   * Checks if an employee ID is authorized to log in.
+   * An employee is authorized if a user profile exists for their ID in localStorage.
+   * This function acts as the central authorization check for employees.
+   * @param {string} employeeId The employee ID to check for authorization.
+   * @returns {boolean} True if the employee is authorized (profile exists), false otherwise.
+   */
+  function isEmployeeAuthorized(employeeId) {
+      // Employee IDs must start with 'SCS-' or 'ADM-'
+      if (!employeeId || (!employeeId.startsWith('SCS-') && !employeeId.startsWith('ADM-'))) {
+          return false;
+      }
+      // Check if a user profile exists in localStorage for this employee ID
+      return localStorage.getItem(`userProfile_${employeeId}`) !== null;
+  }
+  
+  async function processLogin(loginData) {
+      const { employeeIdInput, adminUsernameInput, passwordInput, mobileNumberInput, roleSelect } = loginData;
+      
+      if (CONFIG.USE_REMOTE) {
+          try {
+              const res = await TrackerAPI.login(loginData);
+              currentUserRole = res.user.role;
+              currentEmployeeId = res.user.employeeId || res.user.id;
+              window.login();
+              return;
+          } catch (e) {
+              console.error('Backend login failed, falling back to local', e);
+              showAlert('Backend login failed. Using local authentication.');
+          }
+      }
+      
+      if (roleSelect === 'employee') {
+          if (!employeeIdInput) {
+              showAlert('Please enter Employee ID.');
+              return;
+          }
+          
+          // Basic format validation (SCS- prefix)
+          if (!employeeIdInput.startsWith('SCS-')) {
+              showAlert('Employee ID must start with "SCS-" (e.g., SCS-12345 or SCS-123456).');
+              return;
+          }
+          
+          // CRITICAL NEW AUTHORIZATION CHECK
+          if (!isEmployeeAuthorized(employeeIdInput)) {
+              showAlert('Employee ID not authorized. Please check your ID or contact your administrator.');
+              return;
+          }
+          
+          // Retrieve the stored profile to get the correct password and mobile number
+          const employeeProfile = getUserProfile(employeeIdInput);
+          
+          if (!employeeProfile || !employeeProfile.password || !employeeProfile.mobileNo) {
+              showAlert('Employee profile data incomplete. Please contact your administrator.');
+              return;
+          }
+          
+          // Compare the entered mobile number with the mobile number stored in the employee's profile
+          if (mobileNumberInput !== employeeProfile.mobileNo) {
+              showAlert('Incorrect mobile number for Employee login.');
+              return;
+          }
+          
+          // Compare the entered password with the password stored in the employee's profile
+          if (passwordInput !== employeeProfile.password) {
+              showAlert('Incorrect password for Employee login.');
+              return;
+          }
+          
+          currentUserRole = 'employee';
+          currentEmployeeId = employeeIdInput;
+          showAlert(`Employee ${employeeIdInput} login successful!`);
+          login();
+      } else if (roleSelect === 'admin') {
+          if (!adminUsernameInput) {
+              showAlert('Please enter Admin Username.');
+              return;
+          }
+          
+          let adminProfile = getUserProfile(adminUsernameInput);
+          let isPredefinedAdmin = allowedAdminUsernames.includes(adminUsernameInput);
+          
+          if (!isPredefinedAdmin && Object.keys(adminProfile).length === 0) {
+              showAlert('Admin Username not found. Please check your username or add it via the "Add Admin" feature if you are an existing admin.');
+              return;
+          }
+          
+          // For predefined admins, check against the common password and mobile number
+          if (isPredefinedAdmin) {
+              // Ensure a profile exists for predefined admins upon first login, and get their mobile number
+              if (Object.keys(adminProfile).length === 0) {
+                  const foundAdminData = initialAdminData.find(admin => admin.adminId === adminUsernameInput);
+                  adminProfile = {
+                      employeeId: adminUsernameInput,
+                      name: foundAdminData ? foundAdminData.name : adminUsernameInput.replace('ADM-', ''),
+                      mobileNo: foundAdminData ? foundAdminData.mobileNo : 'N/A',
+                      emailId: 'N/A',
+                      password: adminCommonPassword
+                  };
+                  saveUserProfile(adminProfile);
+              }
+              
+              // Mobile Number Verification for predefined admins
+              if (mobileNumberInput !== adminProfile.mobileNo) {
+                  showAlert('Incorrect mobile number for Admin login.');
+                  return;
+              }
+              
+              if (passwordInput !== adminCommonPassword) {
+                  showAlert('Incorrect password for Admin login.');
+                  return;
+              }
+          } else {
+              // For dynamically added admins, check against their specific password and mobile number
+              if (!adminProfile.mobileNo) {
+                  showAlert('Admin profile data incomplete. Please contact your administrator.');
+                  return;
+              }
+              
+              // Mobile Number Verification for dynamically added admins
+              if (mobileNumberInput !== adminProfile.mobileNo) {
+                  showAlert('Incorrect mobile number for Admin login.');
+                  return;
+              }
+              
+              if (passwordInput !== adminProfile.password) {
+                  showAlert('Incorrect password for Admin login.');
+                  return;
+              }
+          }
+          
+          currentEmployeeId = adminUsernameInput;
+          currentUserRole = 'admin';
+          showAlert(`Admin ${adminUsernameInput} login successful!`);
+          login();
+      }
+  }
+  
+  function login() {
+      document.getElementById('loginBtn').style.display = 'none';
+      document.getElementById('logoutBtn').style.display = 'block';
+      document.querySelectorAll('.sidebar button:not(#loginBtn):not(#logoutBtn)').forEach(btn => btn.style.display = 'block');
+      
+      // Save session to localStorage
+      localStorage.setItem('lastLoggedInRole', currentUserRole);
+      localStorage.setItem('lastLoggedInEmployeeId', currentEmployeeId);
+      
+      if (currentUserRole === 'admin') {
+          document.getElementById('employeeManagementBtn').style.display = 'block';
+          document.getElementById('adminProfileBtn').style.display = 'block';
+          showSection('admin-profile');
+          populateEmployeeFilter();
+      } else {
+          document.getElementById('employeeManagementBtn').style.display = 'none';
+          document.getElementById('adminProfileBtn').style.display = 'none';
+          showSection('dashboard');
+      }
+      
+      updateSidebarProfile();
+      
+      // Initialize Socket.IO for real-time updates
+      initSocketIO();
+  }
+  
+  function confirmLogout() {
+      showConfirm('Are you sure you want to log out?', (confirmed) => {
+          if (confirmed) {
+              logout();
+          } else {
+              showAlert('Logout cancelled.');
+          }
+      });
+  }
+  
+  function logout() {
+      currentUserRole = null;
+      currentEmployeeId = null;
+      stopLocationTracking();
+      
+      // Clear session from localStorage
+      localStorage.removeItem('lastLoggedInRole');
+      localStorage.removeItem('lastLoggedInEmployeeId');
+      
+      // Clear token
+      TOKEN = null;
+      localStorage.removeItem('tracker_token');
+      
+      showAlert('Logged out successfully!');
+      showSection('login');
+      document.querySelectorAll('.sidebar button:not(#loginBtn)').forEach(btn => btn.style.display = 'none');
+      document.getElementById('loginBtn').style.display = 'block';
+      document.getElementById('logoutBtn').style.display = 'none';
+      document.getElementById('sidebar-employee-name').textContent = "Employee Name";
+      document.getElementById('sidebar-employee-id').textContent = "EMP-ID";
+      document.getElementById('sidebar-profile-photo').src = "https://storage.googleapis.com/workspace-0f70711f-8b4e-4d94-86f1-2a93ccde5887/image/b480eacc-40ca-4251-4c52-b6c5587b3aa7.png";
+      
+      // Disconnect socket
+      if (socket) {
+        socket.disconnect();
+        socket = null;
+      }
+  }
+  
+  const customAlertModal = document.getElementById('customAlertModal');
+  const alertMessage = document.getElementById('alertMessage');
+  const customConfirmModal = document.getElementById('customConfirmModal');
+  const confirmMessage = document.getElementById('confirmMessage');
+  const confirmYesButton = document.getElementById('confirmYes');
+  const confirmNoButton = document.getElementById('confirmNo');
+  let confirmCallback = null;
+  let watchId = null; // Global variable to hold the watchPosition ID
+  
+  function showSection(sectionId) {
+    // Stop location tracking if navigating away from daily-activity
+    if (sectionId !== 'daily-activity') {
+        stopLocationTracking();
+    }
+    
+    const restrictedSections = ['dashboard', 'daily-activity', 'followups', 'profile', 'employee-management', 'admin-profile'];
+    if (restrictedSections.includes(sectionId) && !currentUserRole) {
+        showAlert('Please login to access this section.');
+        return;
+    }
+    
+    if (sectionId === 'employee-management' && currentUserRole !== 'admin') {
+        showAlert('Access Denied: Only administrators can view employee details.');
+        return;
+    }
+    
+    if (sectionId === 'admin-profile' && currentUserRole !== 'admin') {
+        showAlert('Access Denied: Only administrators can view their profile here.');
+        return;
+    }
+    
+    const sections = document.querySelectorAll('.main-content section');
+    sections.forEach(section => {
+      section.classList.remove('active');
+    });
+    document.getElementById(sectionId).classList.add('active');
+    
+    if (sectionId === 'dashboard') {
+        document.getElementById('dashboard-welcome-message').textContent = `Welcome, ${currentEmployeeId}!`;
+    } else if (sectionId === 'daily-activity') {
+        // Set today's date as default filter
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('activity-date-filter').value = today;
+        
+        // Show/hide employee filter based on role
+        if (currentUserRole === 'admin') {
+            document.getElementById('employee-filter-container').style.display = 'block';
+            populateEmployeeFilter();
+        } else {
+            document.getElementById('employee-filter-container').style.display = 'none';
+        }
+        
+        loadDailyActivity();
+        
+        // Start location tracking when entering daily-activity section
+        // Only start if there's an active check-in session
+        const activeCheckInSessionId = localStorage.getItem(`currentCheckInSessionId_${currentEmployeeId}`);
+        if (activeCheckInSessionId) {
+            startLocationTracking();
+        }
+    } else if (sectionId === 'followups') {
+      loadFollowUps();
+    } else if (sectionId === 'state') {
+      loadStates();
+    } else if (sectionId === 'city') {
+      loadStatesForCitySelect();
+      loadCities();
+    } else if (sectionId === 'profile') {
+      loadUserProfile();
+    } else if (sectionId === 'employee-management') {
+        loadEmployeeDetails();
+    } else if (sectionId === 'admin-profile') {
+        loadAdminDetails();
+    }
+  }
+  
+  function showAlert(message) {
+    alertMessage.textContent = message;
+    customAlertModal.style.display = 'flex';
+  }
+  
+  function closeAlert() {
+    customAlertModal.style.display = 'none';
+  }
+  
+  function showConfirm(message, callback) {
+    confirmMessage.textContent = message;
+    confirmCallback = callback;
+    customConfirmModal.style.display = 'flex';
+  }
+  
+  confirmYesButton.onclick = () => {
+    if (confirmCallback) {
+      confirmCallback(true);
+    }
+    customConfirmModal.style.display = 'none';
+  };
+  
+  confirmNoButton.onclick = () => {
+    if (confirmCallback) {
+      confirmCallback(false);
+    }
+    customConfirmModal.style.display = 'none';
+  };
+  
+  function togglePasswordVisibility() {
+    const passwordField = document.getElementById('profile-password');
+    if (passwordField.type === 'password') {
+      passwordField.type = 'text';
+    } else {
+      passwordField.type = 'password';
+    }
+  }
+  
+  function generateUniqueId(prefix = '') {
+    const timestampPart = Date.now().toString(36);
+    const randomPart = Math.random().toString(36).substr(2, 5);
+    return `${prefix}${timestampPart}${randomPart}`.toUpperCase();
+  }
+  
+  function exportToExcel(sectionId) {
+    let tableId;
+    let fileName;
+    switch (sectionId) {
+      case 'daily-activity':
+        tableId = 'daily-activity-table-body';
+        fileName = 'Daily_Activity_Records';
+        break;
+      case 'followups':
+        tableId = 'followup-table';
+        fileName = 'FollowUp_Records';
+        break;
+      case 'state':
+        tableId = 'state-table';
+        fileName = 'State_Management';
+        break;
+      case 'city':
+        tableId = 'city-table';
+        fileName = 'City_Management';
+        break;
+      case 'employee-management':
+        tableId = 'employee-details-table';
+        fileName = 'Employee_Details';
+        break;
+      case 'admin-profile':
+        tableId = 'admin-details-table';
+        fileName = 'Admin_Profile';
+        break;
+      default:
+        showAlert('Export not supported for this section.');
+        return;
+    }
+    
+    const table = document.getElementById(tableId);
+    if (!table) {
+      showAlert('Table not found for export.');
+      return;
+    }
+    
+    let csv = [];
+    const headers = document.querySelector(`#${sectionId} thead tr`).children;
+    let rowData = [];
+    for (let i = 0; i < headers.length; i++) {
+      // Exclude 'Actions' column from export
+      if (headers[i].textContent.trim() !== 'Actions') {
+        rowData.push(headers[i].textContent.trim());
+      }
+    }
+    csv.push(rowData.join(','));
+    
+    const rows = table.querySelectorAll('tr');
+    rows.forEach(row => {
+      rowData = [];
+      const cols = row.querySelectorAll('td');
+      cols.forEach((col, index) => {
+        // Exclude the last column (Actions) from export, unless it's the daily-activity table
+        if (sectionId === 'daily-activity' || index < cols.length - 1) {
+          let cellText = col.textContent.trim();
+          // Handle commas in cell text by enclosing in quotes
+          if (cellText.includes(',')) {
+            cellText = `"${cellText}"`;
+          }
+          rowData.push(cellText);
+        }
+      });
+      csv.push(rowData.join(','));
+    });
+    
+    const csvString = csv.join('\n');
+    const blob = new Blob([csvString], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    if (link.download !== undefined) {
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `${fileName}_${new Date().toISOString().split('T')[0]}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      showAlert('Data exported successfully to Excel (CSV)!');
+    } else {
+      showAlert('Your browser does not support downloading files directly. Please copy the data manually.');
+    }
+  }
+  
+  // --- Daily Activity (Merged Attendance & Visits) ---
+  
+  // Override frontend functions to use backend
+  const _orig_getDailyActivityRecords = window.getDailyActivityRecords;
+  window.getDailyActivityRecords = async function() {
+    if (CONFIG.USE_REMOTE && TOKEN) {
+      try {
+        return await TrackerAPI.getDailyActivityRecords();
+      } catch (e) {
+        console.error('Failed to fetch from backend, using local storage', e);
+      }
+    }
+    
+    if (typeof _orig_getDailyActivityRecords === 'function') {
+      return _orig_getDailyActivityRecords();
+    }
+    return [];
+  };
+  
+  const _orig_saveDailyActivityRecords = window.saveDailyActivityRecords;
+  window.saveDailyActivityRecords = async function(records) {
+    if (CONFIG.USE_REMOTE && TOKEN) {
+      try {
+        await TrackerAPI.saveDailyActivityRecords(records);
+        return;
+      } catch (e) {
+        console.error('Failed to save to backend, saving locally', e);
+      }
+    }
+    
+    if (typeof _orig_saveDailyActivityRecords === 'function') {
+      return _orig_saveDailyActivityRecords(records);
+    }
+  };
+  
+  function getDailyActivityRecords() {
+    const allRecords = localStorage.getItem('dailyActivityRecords') ? JSON.parse(localStorage.getItem('dailyActivityRecords')) : [];
+    if (currentUserRole === 'admin') {
+        return allRecords;
+    } else {
+        return allRecords.filter(rec => rec.employeeId === currentEmployeeId);
+    }
+  }
+  
+  function saveDailyActivityRecords(records) {
+    if (currentUserRole === 'admin') {
+        localStorage.setItem('dailyActivityRecords', JSON.stringify(records));
+    } else {
+        let allRecords = localStorage.getItem('dailyActivityRecords') ? JSON.parse(localStorage.getItem('dailyActivityRecords')) : [];
+        const otherEmployeeRecords = allRecords.filter(rec => rec.employeeId !== currentEmployeeId);
+        const updatedRecords = [...otherEmployeeRecords, ...records.filter(rec => rec.employeeId === currentEmployeeId)];
+        localStorage.setItem('dailyActivityRecords', JSON.stringify(updatedRecords));
+    }
+  }
+  
+  async function markCheckIn() {
+    if (!currentEmployeeId) {
+        showAlert('Please login to mark attendance.');
+        return;
+    }
+    
+    const now = new Date();
+    const today = now.toLocaleDateString();
+    let records = await getDailyActivityRecords();
+    
+    // Find the latest Check-In record for the current employee on today's date
+    const latestCheckIn = records
+        .filter(rec => rec.employeeId === currentEmployeeId && rec.type === 'Check-In' && new Date(rec.timestamp).toLocaleDateString() === today)
+        .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+        [0];
+        
+    // Find the latest Check-Out record for the current employee on today's date
+    const latestCheckOut = records
+        .filter(rec => rec.employeeId === currentEmployeeId && rec.type === 'Check-Out' && new Date(rec.timestamp).toLocaleDateString() === today)
+        .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+        [0];
+        
+    // Check if there's an active check-in session (check-in exists and is more recent than any check-out)
+    if (latestCheckIn && (!latestCheckOut || new Date(latestCheckIn.timestamp) > new Date(latestCheckOut.timestamp))) {
+        showAlert('You are already checked in! Please check out before checking in again.');
+        return;
+    }
+    
+    const newCheckInRecord = {
+        id: generateUniqueId('ACT-'),
+        employeeId: currentEmployeeId,
+        timestamp: now.toISOString(),
+        type: 'Check-In',
+        location: null, // Will be updated by startLocationTracking
+        mapLink: null, // Will be updated by startLocationTracking
+        details: 'Live GPS',
+        checkOutId: null // To link check-in with its corresponding check-out
+    };
+    
+    records.push(newCheckInRecord);
+    await saveDailyActivityRecords(records);
+    localStorage.setItem(`currentCheckInSessionId_${currentEmployeeId}`, newCheckInRecord.id); // Store the ID of the current check-in session
+    showAlert(`Checked in at ${now.toLocaleTimeString()}`);
+    
+    // Start live location tracking immediately
+    startLocationTracking();
+    
+    loadDailyActivity(); // Reload table to show new check-in
+    
+    // Show Log Visit Modal
+    document.getElementById('log-visit-checkin-id').value = newCheckInRecord.id;
+    document.getElementById('logVisitModal').style.display = 'flex';
+  }
+  
+  async function markCheckOut() {
+    if (!currentEmployeeId) {
+        showAlert('Please login to mark attendance.');
+        return;
+    }
+    
+    const activeCheckInSessionId = localStorage.getItem(`currentCheckInSessionId_${currentEmployeeId}`);
+    if (!activeCheckInSessionId) {
+        showAlert('You need to check in first!');
+        return;
+    }
+    
+    const now = new Date();
+    let records = await getDailyActivityRecords();
+    const checkInRecordIndex = records.findIndex(rec => rec.id === activeCheckInSessionId && rec.employeeId === currentEmployeeId && rec.type === 'Check-In');
+    if (checkInRecordIndex === -1) {
+        showAlert('No active check-in session found to check out from.');
+        localStorage.removeItem(`currentCheckInSessionId_${currentEmployeeId}`);
+        return;
+    }
+    
+    const checkInRecord = records[checkInRecordIndex];
+    const newCheckOutRecord = {
+        id: generateUniqueId('ACT-'),
+        employeeId: currentEmployeeId,
+        timestamp: now.toISOString(),
+        type: 'Check-Out',
+        location: null, // Will be updated by stopLocationTracking
+        mapLink: null, // Will be updated by stopLocationTracking
+        details: 'Live GPS',
+        linkedCheckInId: checkInRecord.id // Link check-out to its check-in
+    };
+    
+    // Update the check-in record to link to this check-out
+    checkInRecord.checkOutId = newCheckOutRecord.id;
+    records.push(newCheckOutRecord);
+    await saveDailyActivityRecords(records);
+    localStorage.removeItem(`currentCheckInSessionId_${currentEmployeeId}`); // Clear the active session ID
+    showAlert(`Checked out at ${now.toLocaleTimeString()}`);
+    stopLocationTracking(); // Stop live location tracking
+    loadDailyActivity(); // Reload table to show new check-out
+  }
+  
+  document.getElementById('log-visit-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const checkInId = document.getElementById('log-visit-checkin-id').value;
+    const clientName = document.getElementById('log-visit-client').value.trim();
+    const visitPurpose = document.getElementById('log-visit-purpose').value.trim();
+    const visitLocationInput = document.getElementById('log-visit-location').value.trim();
+    
+    // Get current live location data
+    const currentLat = document.getElementById('latitude').textContent;
+    const currentLng = document.getElementById('longitude').textContent;
+    let currentAddress = document.getElementById('current-address').textContent;
+    let visitLocationData = null;
+    let visitMapLink = null;
+    
+    if (currentLat !== 'N/A' && currentLng !== 'N/A' && currentAddress !== 'Location tracking inactive') {
+        visitLocationData = {
+            lat: parseFloat(currentLat),
+            lng: parseFloat(currentLng),
+            address: currentAddress
+        };
+        visitMapLink = `https://www.openstreetmap.org/?mlat=${currentLat}&mlon=${currentLng}#map=15/${currentLat}/${currentLng}`;
+    } else {
+        // Fallback if live location isn't available for some reason
+        // Attempt to geocode the manually entered location if live location is not available
+        if (visitLocationInput) {
+            try {
+                const geocoded = await reverseGeocode(null, null, visitLocationInput); // Try to geocode the input
+                if (geocoded.address) {
+                    visitLocationData = {
+                        lat: geocoded.lat,
+                        lng: geocoded.lng,
+                        address: geocoded.address
+                    };
+                    visitMapLink = `https://www.openstreetmap.org/?mlat=${geocoded.lat}&mlon=${geocoded.lng}#map=15/${geocoded.lat}/${geocoded.lng}`;
+                } else {
+                    visitLocationData = visitLocationInput; // Use raw input if geocoding fails
+                }
+            } catch (error) {
+                console.error("Geocoding manual visit location failed:", error);
+                visitLocationData = visitLocationInput; // Use raw input if geocoding fails
+            }
+        } else {
+            visitLocationData = 'N/A'; // No live location and no manual input
+        }
+    }
+    
+    let records = await getDailyActivityRecords();
+    const now = new Date();
+    const newVisitRecord = {
+        id: generateUniqueId('ACT-'),
+        employeeId: currentEmployeeId,
+        timestamp: now.toISOString(),
+        type: 'Visit',
+        location: visitLocationData, // Store the live location data or geocoded manual input
+        mapLink: visitMapLink, // Store the map link
+        details: `${clientName} - ${visitPurpose}`,
+        linkedCheckInId: checkInId // Link visit to the check-in that triggered it
+    };
+    
+    records.push(newVisitRecord);
+    await saveDailyActivityRecords(records);
+    
+    // Add Visit to Follow-Ups
+    let followups = await getFollowUps();
+    const newFollowUp = {
+        id: generateUniqueId('FUP-'),
+        employeeId: currentEmployeeId,
+        subject: `Visit: ${clientName}`, // Subject for follow-up
+        datetime: now.toISOString(), // Current time for follow-up
+        note: `Location: ${typeof visitLocationData === 'object' ? visitLocationData.address : visitLocationData}\nPurpose: ${visitPurpose}`, // Details for follow-up
+        createdAt: now.toISOString()
+    };
+    followups.push(newFollowUp);
+    await saveFollowUps(followups);
+    
+    showAlert('Visit logged successfully and added to Follow Ups!');
+    closeLogVisitModal();
+    loadDailyActivity();
+    loadFollowUps(); // Reload follow-ups to show the new entry
+  });
+  
+  function skipVisit() {
+    const checkInId = document.getElementById('log-visit-checkin-id').value;
+    let records = getDailyActivityRecords();
+    const now = new Date();
+    
+    // Get current live location data at the time of skipping
+    const currentLat = document.getElementById('latitude').textContent;
+    const currentLng = document.getElementById('longitude').textContent;
+    const currentAddress = document.getElementById('current-address').textContent;
+    let skippedLocationData = null;
+    let skippedMapLink = null;
+    
+    // Only capture if location tracking is active and coordinates are available
+    if (currentLat !== 'N/A' && currentLng !== 'N/A' && currentAddress !== 'Location tracking inactive') {
+        skippedLocationData = {
+            lat: parseFloat(currentLat),
+            lng: parseFloat(currentLng),
+            address: currentAddress
+        };
+        skippedMapLink = `https://www.openstreetmap.org/?mlat=${currentLat}&mlon=${currentLng}#map=15/${currentLat}/${currentLng}`;
+    }
+    
+    // Optionally, log a "Skipped Visit" record
+    const newSkippedVisitRecord = {
+        id: generateUniqueId('ACT-'),
+        employeeId: currentEmployeeId,
+        timestamp: now.toISOString(),
+        type: 'Skipped Visit',
+        location: skippedLocationData, // Store the captured location data
+        mapLink: skippedMapLink,      // Store the map link
+        details: 'Visit skipped by employee',
+        linkedCheckInId: checkInId
+    };
+    
+    records.push(newSkippedVisitRecord);
+    saveDailyActivityRecords(records);
+    showAlert('Visit skipped.');
+    closeLogVisitModal();
+    loadDailyActivity(); // Reload to show the skipped visit if logged
+  }
+  
+  function closeLogVisitModal() {
+    document.getElementById('logVisitModal').style.display = 'none';
+    document.getElementById('log-visit-form').reset();
+    document.getElementById('log-visit-checkin-id').value = '';
+  }
+  
+  function populateEmployeeFilter() {
+      const employeeFilter = document.getElementById('activity-employee-filter');
+      employeeFilter.innerHTML = '<option value="">All Employees</option>'; // Default option
+      const allProfiles = getAllUserProfiles();
+      const employeeProfiles = allProfiles.filter(p => !p.employeeId.startsWith('ADM-')); // Exclude admins
+      employeeProfiles.sort((a, b) => a.employeeId.localeCompare(b.employeeId));
+      employeeProfiles.forEach(profile => {
+          const option = document.createElement('option');
+          option.value = profile.employeeId;
+          option.textContent = profile.employeeId;
+          employeeFilter.appendChild(option);
+      });
+  }
+  
+  async function loadDailyActivity() {
+    if (!currentEmployeeId) return;
+    
+    const selectedDateValue = document.getElementById('activity-date-filter').value;
+    const selectedEmployeeId = document.getElementById('activity-employee-filter')?.value || '';
+    const searchTerm = document.getElementById('activity-search').value.toLowerCase();
+    const dailyActivityTableBody = document.getElementById('daily-activity-table-body');
+    dailyActivityTableBody.innerHTML = '';
+    
+    let records = await getDailyActivityRecords();
+    
+    // Filter records based on selected employee (if admin)
+    if (currentUserRole === 'admin' && selectedEmployeeId) {
+        records = records.filter(rec => rec.employeeId === selectedEmployeeId);
+    } else if (currentUserRole === 'employee') {
+        records = records.filter(rec => rec.employeeId === currentEmployeeId);
+    }
+    
+    // Filter by date
+    if (selectedDateValue) {
+      records = records.filter(record => {
+        const recordDate = new Date(record.timestamp).toISOString().split('T')[0];
+        return recordDate === selectedDateValue;
+      });
+    }
+    
+    // Filter by search term (employee ID, type, location, details)
+    if (searchTerm) {
+        records = records.filter(record =>
+            (record.employeeId && record.employeeId.toLowerCase().includes(searchTerm)) ||
+            (record.type && record.type.toLowerCase().includes(searchTerm)) ||
+            (record.location && (typeof record.location === 'string' ? record.location.toLowerCase().includes(searchTerm) : record.location.address?.toLowerCase().includes(searchTerm))) ||
+            (record.details && record.details.toLowerCase().includes(searchTerm))
+        );
+    }
+    
+    // Sort records by timestamp (most recent first)
+    records.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    
+    if (records.length === 0) {
+      dailyActivityTableBody.innerHTML = '<tr><td colspan="9">No daily activity records found</td></tr>';
+      return;
+    }
+    
+    records.forEach(record => {
+      const row = dailyActivityTableBody.insertRow();
+      const recordDateTime = new Date(record.timestamp);
+      const recordDate = recordDateTime.toLocaleDateString();
+      const recordTime = recordDateTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const employeeProfile = getUserProfile(record.employeeId); // Get employee profile
+      const employeeName = employeeProfile.name || 'N/A'; // Get employee name
+      
+      row.insertCell(0).textContent = record.employeeId || 'N/A';
+      row.insertCell(1).textContent = employeeName; // NEW CELL FOR NAME
+      row.insertCell(2).textContent = record.type;
+      row.insertCell(3).textContent = `${recordDate} ${recordTime}`;
+      
+      const locationCell = row.insertCell(4); // Adjusted index
+      const latitudeCell = row.insertCell(5); // Adjusted index
+      const longitudeCell = row.insertCell(6); // Adjusted index
+      
+      if (record.location) {
+          if (typeof record.location === 'object' && record.location.address) {
+              locationCell.textContent = record.location.address;
+              latitudeCell.textContent = record.location.lat ? record.location.lat.toFixed(6) : 'N/A';
+              longitudeCell.textContent = record.location.lng ? record.location.lng.toFixed(6) : 'N/A';
+          } else {
+              locationCell.textContent = record.location;
+              latitudeCell.textContent = 'N/A';
+              longitudeCell.textContent = 'N/A';
+          }
+      } else {
+          locationCell.textContent = 'N/A';
+          latitudeCell.textContent = 'N/A';
+          longitudeCell.textContent = 'N/A';
+      }
+      
+      const mapCell = row.insertCell(7); // Adjusted index
+      if (record.mapLink) {
+        // Using OpenStreetMap pin image
+        mapCell.innerHTML = `<a href="${record.mapLink}" target="_blank" style="color: #00d4ff;">
+                                <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/d/d1/Pushpin_red.svg/1200px-Pushpin_red.svg.png" alt="Map pin" width="20">
+                                View Map
+                             </a>`;
+      } else {
+        mapCell.textContent = 'N/A';
+      }
+      
+      const detailsCell = row.insertCell(8); // Adjusted index
+      detailsCell.textContent = record.details || 'N/A';
+    });
+  }
+  
+  let leafletMap;
+  let leafletMarker;
+  
+  /**
+   * Reverse geocodes coordinates to an address using OpenStreetMap Nominatim.
+   * @param {number} lat Latitude.
+   * @param {number} lng Longitude.
+   * @param {string} query Optional: If lat/lng are null, attempts to geocode a text query.
+   * @returns {Promise<object>} A promise that resolves with {address: string, lat: number, lng: number} or an error.
+   */
+  async function reverseGeocode(lat, lng, query = null) {
+      let url;
+      if (lat !== null && lng !== null) {
+          url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}`;
+      } else if (query) {
+          url = `https://nominatim.openstreetmap.org/search?format=jsonv2&q=${encodeURIComponent(query)}&limit=1`;
+      } else {
+          return { address: 'N/A', lat: null, lng: null };
+      }
+      
+      try {
+          const response = await fetch(url, {
+              headers: {
+                  'User-Agent': 'TrackerApp/1.0 (your-email@example.com)' // Required by Nominatim
+              }
+          });
+          if (!response.ok) {
+              throw new Error(`HTTP error! status: ${response.status}`);
+          }
+          const data = await response.json();
+          if (lat !== null && lng !== null) { // Reverse geocoding
+              return {
+                  address: data.display_name || 'Unknown Address',
+                  lat: parseFloat(data.lat),
+                  lng: parseFloat(data.lon)
+              };
+          } else if (query && data.length > 0) { // Forward geocoding
+              return {
+                  address: data[0].display_name || 'Unknown Address',
+                  lat: parseFloat(data[0].lat),
+                  lng: parseFloat(data[0].lon)
+              };
+          } else {
+              return { address: 'Address not found', lat: null, lng: null };
+          }
+      } catch (error) {
+          console.error("Geocoding error:", error);
+          return { address: 'Geocoding failed', lat: null, lng: null };
+      }
+  }
+  
+  function startLocationTracking() {
+      // IMPORTANT: This web app MUST be served over HTTPS for Geolocation to work on most browsers, especially mobile.
+      // If you are testing locally, use `localhost` or a tool that provides HTTPS.
+      if (!navigator.geolocation) {
+          showAlert('Geolocation is not supported by your browser.');
+          return;
+      }
+      
+      // Check if location tracking is already active
+      if (watchId !== null) {
+          // Location tracking is already active, no need to restart
+          return;
+      }
+      
+      document.getElementById('location-status-text').textContent = 'Active';
+      document.getElementById('location-tracking-status').style.color = '#4CAF50';
+      const mapContainer = document.getElementById('map-container');
+      mapContainer.style.display = 'block';
+      
+      // Initialize Leaflet map if not already initialized
+      if (!leafletMap) {
+          // Set initial view to a default location (will be updated when we get position)
+          leafletMap = L.map('leaflet-map').setView([20.5937, 78.9629], 5); // Default to center of India
+          
+          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+              attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+          }).addTo(leafletMap);
+          
+          leafletMarker = L.marker([20.5937, 78.9629]).addTo(leafletMap);
+      }
+      
+      const options = {
+          enableHighAccuracy: true,
+          timeout: 10000, // Increased timeout for better mobile performance
+          maximumAge: 3000 // Allow using a cached position up to 3 seconds old
+      };
+      
+      watchId = navigator.geolocation.watchPosition(
+          async (position) => { // Added async here
+              const latitude = position.coords.latitude;
+              const longitude = position.coords.longitude;
+              const accuracy = position.coords.accuracy;
+              
+              // Update UI with location data
+              document.getElementById('latitude').textContent = latitude.toFixed(6);
+              document.getElementById('longitude').textContent = longitude.toFixed(6);
+              document.getElementById('accuracy').textContent = accuracy.toFixed(2);
+              document.getElementById('current-address').textContent = 'Getting address...';
+              
+              // Update Leaflet map
+              leafletMap.setView([latitude, longitude], 15);
+              leafletMarker.setLatLng([latitude, longitude]);
+              
+              try {
+                  // Get address using reverse geocoding
+                  const geocoded = await reverseGeocode(latitude, longitude);
+                  if (geocoded.address) {
+                      document.getElementById('current-address').textContent = geocoded.address;
+                      
+                      // Update the location of the currently active Check-In session
+                      const activeCheckInSessionId = localStorage.getItem(`currentCheckInSessionId_${currentEmployeeId}`);
+                      if (activeCheckInSessionId) {
+                          let records = await getDailyActivityRecords();
+                          const recordIndex = records.findIndex(rec => rec.id === activeCheckInSessionId && rec.employeeId === currentEmployeeId && rec.type === 'Check-In');
+                          if (recordIndex !== -1) {
+                              records[recordIndex].location = {
+                                  lat: latitude,
+                                  lng: longitude,
+                                  address: geocoded.address
+                              };
+                              records[recordIndex].mapLink = `https://www.openstreetmap.org/?mlat=${latitude}&mlon=${longitude}#map=15/${latitude}/${longitude}`;
+                              await saveDailyActivityRecords(records);
+                          }
+                      }
+                  } else {
+                      document.getElementById('current-address').textContent = 'Address not found';
+                  }
+              } catch (error) {
+                  console.error("Reverse geocoding failed:", error);
+                  document.getElementById('current-address').textContent = 'Failed to get address';
+              }
+              
+              console.log(`Live Location: Lat ${latitude}, Lon ${longitude}, Accuracy ${accuracy}m`);
+          },
+          (error) => {
+              document.getElementById('location-status-text').textContent = 'Error';
+              document.getElementById('location-tracking-status').style.color = '#F44336';
+              let errorMessage = 'Unknown error occurred.';
+              
+              switch (error.code) {
+                  case error.PERMISSION_DENIED:
+                      errorMessage = 'Location access denied by the user. Please enable location for this site in your browser settings.';
+                      break;
+                  case error.POSITION_UNAVAILABLE:
+                      errorMessage = 'Location information is unavailable. Please ensure your device\'s GPS/Location Services are enabled and you have a clear signal.';
+                      break;
+                  case error.TIMEOUT:
+                      errorMessage = 'The request to get user location timed out. Try moving to an area with better signal.';
+                      break;
+              }
+              
+              showAlert('Location tracking error: ' + errorMessage);
+              console.error('Geolocation error:', error);
+              stopLocationTracking(); // Stop tracking on error
+          },
+          options
+      );
+  }
+  
+  function stopLocationTracking() {
+      if (watchId !== null) {
+          navigator.geolocation.clearWatch(watchId);
+          watchId = null;
+          document.getElementById('location-status-text').textContent = 'Inactive';
+          document.getElementById('location-tracking-status').style.color = '#F44336';
+          document.getElementById('latitude').textContent = 'N/A';
+          document.getElementById('longitude').textContent = 'N/A';
+          document.getElementById('accuracy').textContent = 'N/A';
+          document.getElementById('current-address').textContent = 'Location tracking inactive';
+          
+          // Update the location of the corresponding Check-Out record if needed
+          let records = getDailyActivityRecords();
+          const latestCheckOutRecordIndex = records
+              .filter(rec => rec.employeeId === currentEmployeeId && rec.type === 'Check-Out' && !rec.location)
+              .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+              .map(rec => records.indexOf(rec))
+              [0];
+              
+          if (latestCheckOutRecordIndex !== undefined && 
+              document.getElementById('latitude').textContent !== 'N/A' && 
+              document.getElementById('longitude').textContent !== 'N/A') {
+              records[latestCheckOutRecordIndex].location = {
+                  lat: parseFloat(document.getElementById('latitude').textContent),
+                  lng: parseFloat(document.getElementById('longitude').textContent),
+                  address: document.getElementById('current-address').textContent
+              };
+              records[latestCheckOutRecordIndex].mapLink = `https://www.openstreetmap.org/?mlat=${parseFloat(document.getElementById('latitude').textContent)}&mlon=${parseFloat(document.getElementById('longitude').textContent)}#map=15/${parseFloat(document.getElementById('latitude').textContent)}/${parseFloat(document.getElementById('longitude').textContent)}`;
+              saveDailyActivityRecords(records);
+          }
+      }
+  }
+  
+  // --- Follow Ups ---
+  
+  // Override frontend functions to use backend
+  const _orig_getFollowUps = window.getFollowUps;
+  window.getFollowUps = async function() {
+    if (CONFIG.USE_REMOTE && TOKEN) {
+      try {
+        return await TrackerAPI.getFollowUps();
+      } catch (e) {
+        console.error('Failed to fetch from backend, using local storage', e);
+      }
+    }
+    
+    if (typeof _orig_getFollowUps === 'function') {
+      return _orig_getFollowUps();
+    }
+    return [];
+  };
+  
+  const _orig_saveFollowUps = window.saveFollowUps;
+  window.saveFollowUps = async function(followups) {
+    if (CONFIG.USE_REMOTE && TOKEN) {
+      try {
+        await TrackerAPI.saveFollowUps(followups);
+        return;
+      } catch (e) {
+        console.error('Failed to save to backend, saving locally', e);
+      }
+    }
+    
+    if (typeof _orig_saveFollowUps === 'function') {
+      return _orig_saveFollowUps(followups);
+    }
+  };
+  
+  function getFollowUps() {
+    const allFollowups = localStorage.getItem('followUps') ? JSON.parse(localStorage.getItem('followUps')) : [];
+    if (currentUserRole === 'admin') {
+        return allFollowups;
+    } else {
+        return allFollowups.filter(f => f.employeeId === currentEmployeeId);
+    }
+  }
+  
+  function saveFollowUps(followups) {
+    if (currentUserRole === 'admin') {
+        localStorage.setItem('followUps', JSON.stringify(followups));
+    } else {
+        let allFollowups = localStorage.getItem('followUps') ? JSON.parse(localStorage.getItem('followUps')) : [];
+        const otherEmployeeFollowups = allFollowups.filter(f => f.employeeId !== currentEmployeeId);
+        const updatedFollowups = [...otherEmployeeFollowups, ...followups.filter(f => f.employeeId === currentEmployeeId)];
+        localStorage.setItem('followUps', JSON.stringify(updatedFollowups));
+    }
+  }
+  
+  function addFollowUpEntry() {
+    if (!currentEmployeeId) {
+        showAlert('Please login to add follow-ups.');
+        return;
+    }
+    document.getElementById('followup-subject').focus();
+  }
+  
+  document.getElementById('followup-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const subject = document.getElementById('followup-subject').value;
+    const datetime = document.getElementById('followup-datetime').value;
+    const note = document.getElementById('followup-note').value;
+    const docId = document.getElementById('followup-doc-id') ? document.getElementById('followup-doc-id').value : '';
+    
+    let followups = await getFollowUps();
+    if (docId) {
+      const index = followups.findIndex(f => f.id === docId);
+      if (index !== -1) {
+        followups[index] = { id: docId, employeeId: currentEmployeeId, subject, datetime, note, createdAt: followups[index].createdAt };
+        showAlert('Follow-up updated successfully!');
+      }
+    } else {
+      const newFollowUp = {
+        id: generateUniqueId('FUP-'),
+        employeeId: currentEmployeeId,
+        subject,
+        datetime,
+        note,
+        createdAt: new Date().toISOString()
+      };
+      followups.push(newFollowUp);
+      showAlert('Follow-up added successfully!');
+    }
+    
+    await saveFollowUps(followups);
+    document.getElementById('followup-form').reset();
+    if (document.getElementById('followup-doc-id')) document.getElementById('followup-doc-id').value = '';
+    loadFollowUps();
+  });
+  
+  async function loadFollowUps() {
+    if (!currentEmployeeId) return;
+    
+    const followupTableBody = document.getElementById('followup-table');
+    followupTableBody.innerHTML = '';
+    const followups = await getFollowUps().sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    const employeeIdHeader = document.getElementById('followup-employee-id-header');
+    const employeeNameHeader = document.getElementById('followup-employee-name-header');
+    
+    if (currentUserRole === 'admin') {
+        employeeIdHeader.style.display = 'table-cell';
+        employeeNameHeader.style.display = 'table-cell';
+    } else {
+        employeeIdHeader.style.display = 'none';
+        employeeNameHeader.style.display = 'none';
+    }
+    
+    if (followups.length === 0) {
+      followupTableBody.innerHTML = '<tr><td colspan="6">No follow-up records found</td></tr>';
+      return;
+    }
+    
+    followups.forEach(followup => {
+      const row = followupTableBody.insertRow();
+      const employeeProfile = getUserProfile(followup.employeeId);
+      const employeeName = employeeProfile.name || 'N/A';
+      
+      let cellIndex = 0;
+      if (currentUserRole === 'admin') {
+          row.insertCell(cellIndex++).textContent = followup.employeeId || 'N/A';
+          row.insertCell(cellIndex++).textContent = employeeName;
+      }
+      
+      row.insertCell(cellIndex++).textContent = followup.subject;
+      row.insertCell(cellIndex++).textContent = new Date(followup.datetime).toLocaleString();
+      row.insertCell(cellIndex++).textContent = followup.note;
+      
+      const actionsCell = row.insertCell(cellIndex++);
+      actionsCell.innerHTML = `
+        <button onclick="editFollowUp('${followup.id}')">Edit</button>
+        <button onclick="deleteFollowUp('${followup.id}')">Delete</button>
+      `;
+    });
+  }
+  
+  async function editFollowUp(docId) {
+    const followups = await getFollowUps();
+    const followup = followups.find(f => f.id === docId);
+    if (followup) {
+      let docIdInput = document.getElementById('followup-doc-id');
+      if (!docIdInput) {
+        docIdInput = document.createElement('input');
+        docIdInput.type = 'hidden';
+        docIdInput.id = 'followup-doc-id';
+        document.getElementById('followup-form').prepend(docIdInput);
+      }
+      docIdInput.value = followup.id;
+      document.getElementById('followup-subject').value = followup.subject;
+      document.getElementById('followup-datetime').value = followup.datetime;
+      document.getElementById('followup-note').value = followup.note;
+      showAlert('Fields populated for editing. Click "Save Follow-Up" to update.');
+    } else {
+      showAlert('Follow-up not found.');
+    }
+  }
+  
+  function deleteFollowUp(docId) {
+    showConfirm('Are you sure you want to delete this follow-up?', async (confirmed) => {
+      if (confirmed) {
+        let followups = await getFollowUps();
+        followups = followups.filter(f => f.id !== docId);
+        await saveFollowUps(followups);
+        showAlert('Follow-up deleted successfully!');
+        loadFollowUps();
+      }
+    });
+  }
+  
+  // --- State Management ---
+  
+  // Override frontend functions to use backend
+  const _orig_getStates = window.getStates;
+  window.getStates = async function() {
+    if (CONFIG.USE_REMOTE && TOKEN) {
+      try {
+        return await TrackerAPI.getStates();
+      } catch (e) {
+        console.error('Failed to fetch from backend, using local storage', e);
+      }
+    }
+    
+    if (typeof _orig_getStates === 'function') {
+      return _orig_getStates();
+    }
+    return [];
+  };
+  
+  const _orig_saveStatesData = window.saveStatesData;
+  window.saveStatesData = async function(states) {
+    if (CONFIG.USE_REMOTE && TOKEN) {
+      try {
+        await TrackerAPI.saveStates(states);
+        return;
+      } catch (e) {
+        console.error('Failed to save to backend, saving locally', e);
+      }
+    }
+    
+    if (typeof _orig_saveStatesData === 'function') {
+      return _orig_saveStatesData(states);
+    }
+  };
+  
+  function getStates() {
+    const states = localStorage.getItem('states');
+    return states ? JSON.parse(states) : [];
+  }
+  
+  function saveStatesData(states) {
+    localStorage.setItem('states', JSON.stringify(states));
+  }
+  
+  document.getElementById('state-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const stateNameInput = document.getElementById('state-name');
+    const stateName = stateNameInput.value.trim();
+    
+    if (!stateName) {
+      showAlert('State Name cannot be empty.');
+      return;
+    }
+    
+    let states = await getStates();
+    if (states.some(s => s.name.toLowerCase() === stateName.toLowerCase())) {
+      showAlert('State with this name already exists!');
+      return;
+    }
+    
+    const newState = {
+      id: generateUniqueId('STA-'),
+      name: stateName,
+      createdAt: new Date().toISOString()
+    };
+    
+    states.push(newState);
+    await saveStatesData(states);
+    showAlert('State added successfully!');
+    stateNameInput.value = '';
+    loadStates();
+  });
+  
+  async function loadStates() {
+    const stateTableBody = document.getElementById('state-table');
+    stateTableBody.innerHTML = '';
+    const states = await getStates().sort((a, b) => a.name.localeCompare(b.name));
+    
+    if (states.length === 0) {
+      stateTableBody.innerHTML = '<tr><td colspan="2">No states found</td></tr>';
+      return;
+    }
+    
+    states.forEach(state => {
+      const row = stateTableBody.insertRow();
+      row.insertCell(0).textContent = state.name;
+      const actionsCell = row.insertCell(1);
+      actionsCell.innerHTML = `
+        <button onclick="editState('${state.id}', '${state.name}')">Edit</button>
+        <button onclick="deleteState('${state.id}')">Delete</button>
+      `;
+    });
+  }
+  
+  async function editState(docId, currentName) {
+    showConfirm(`Edit state name from "${currentName}"?`, async (confirmed) => {
+      if (confirmed) {
+        const newName = prompt('Enter new name for the state:', currentName);
+        if (newName && newName.trim() !== '' && newName.trim().toLowerCase() !== currentName.toLowerCase()) {
+          let states = await getStates();
+          const index = states.findIndex(s => s.id === docId);
+          if (index !== -1) {
+            if (states.some(s => s.name.toLowerCase() === newName.trim().toLowerCase() && s.id !== docId)) {
+              showAlert('State with this new name already exists!');
+              return;
+            }
+            states[index].name = newName.trim();
+            await saveStatesData(states);
+            showAlert('State updated successfully!');
+            loadStates();
+            
+            let cities = await getCities();
+            cities.forEach(city => {
+              if (city.stateId === docId) {
+                city.stateName = newName.trim();
+              }
+            });
+            await saveCitiesData(cities);
+          }
+        } else if (newName !== null) {
+          showAlert('State name not changed or invalid.');
+        }
+      }
+    });
+  }
+  
+  function deleteState(docId) {
+    showConfirm('Are you sure you want to delete this state? This will also delete all cities associated with it.', async (confirmed) => {
+      if (confirmed) {
+        let states = await getStates();
+        states = states.filter(s => s.id !== docId);
+        await saveStatesData(states);
+        
+        let cities = await getCities();
+        cities = cities.filter(city => city.stateId !== docId);
+        await saveCitiesData(cities);
+        
+        showAlert('State and associated cities deleted successfully!');
+        loadStates();
+      }
+    });
+  }
+  
+  async function searchState() {
+    const searchTerm = document.getElementById('search-state').value.toLowerCase();
+    const stateTableBody = document.getElementById('state-table');
+    stateTableBody.innerHTML = '';
+    const states = await getStates();
+    const filteredStates = states.filter(state =>
+      state.name.toLowerCase().includes(searchTerm)
+    ).sort((a, b) => a.name.localeCompare(b.name));
+    
+    if (filteredStates.length === 0) {
+      stateTableBody.innerHTML = '<tr><td colspan="2">No matching states found</td></tr>';
+      return;
+    }
+    
+    filteredStates.forEach(state => {
+      const row = stateTableBody.insertRow();
+      row.insertCell(0).textContent = state.name;
+      const actionsCell = row.insertCell(1);
+      actionsCell.innerHTML = `
+        <button onclick="editState('${state.id}', '${state.name}')">Edit</button>
+        <button onclick="deleteState('${state.id}')">Delete</button>
+      `;
+    });
+  }
+  
+  // --- City Management ---
+  
+  // Override frontend functions to use backend
+  const _orig_getCities = window.getCities;
+  window.getCities = async function() {
+    if (CONFIG.USE_REMOTE && TOKEN) {
+      try {
+        return await TrackerAPI.getCities();
+      } catch (e) {
+        console.error('Failed to fetch from backend, using local storage', e);
+      }
+    }
+    
+    if (typeof _orig_getCities === 'function') {
+      return _orig_getCities();
+    }
+    return [];
+  };
+  
+  const _orig_saveCitiesData = window.saveCitiesData;
+  window.saveCitiesData = async function(cities) {
+    if (CONFIG.USE_REMOTE && TOKEN) {
+      try {
+        await TrackerAPI.saveCities(cities);
+        return;
+      } catch (e) {
+        console.error('Failed to save to backend, saving locally', e);
+      }
+    }
+    
+    if (typeof _orig_saveCitiesData === 'function') {
+      return _orig_saveCitiesData(cities);
+    }
+  };
+  
+  function getCities() {
+    const cities = localStorage.getItem('cities');
+    return cities ? JSON.parse(cities) : [];
+  }
+  
+  function saveCitiesData(cities) {
+    localStorage.setItem('cities', JSON.stringify(cities));
+  }
+  
+  async function loadStatesForCitySelect() {
+    const stateSelect = document.getElementById('state-select');
+    stateSelect.innerHTML = '<option value="">-- Select State --</option>';
+    const states = await getStates().sort((a, b) => a.name.localeCompare(b.name));
+    states.forEach(state => {
+      const option = document.createElement('option');
+      option.value = state.id;
+      option.textContent = state.name;
+      stateSelect.appendChild(option);
+    });
+  }
+  
+  document.getElementById('city-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const stateSelect = document.getElementById('state-select');
+    const selectedStateId = stateSelect.value;
+    const selectedStateName = stateSelect.options[stateSelect.selectedIndex].textContent;
+    const cityNameInput = document.getElementById('city-name');
+    const cityName = cityNameInput.value.trim();
+    
+    if (!selectedStateId || !cityName) {
+      showAlert('Please select a State and enter a City Name.');
+      return;
+    }
+    
+    let cities = await getCities();
+    if (cities.some(c => c.stateId === selectedStateId && c.name.toLowerCase() === cityName.toLowerCase())) {
+      showAlert('City with this name already exists in the selected state!');
+      return;
+    }
+    
+    const newCity = {
+      id: generateUniqueId('CTY-'),
+      stateId: selectedStateId,
+      stateName: selectedStateName,
+      name: cityName,
+      createdAt: new Date().toISOString()
+    };
+    
+    cities.push(newCity);
+    await saveCitiesData(cities);
+    showAlert('City added successfully!');
+    cityNameInput.value = '';
+    stateSelect.value = '';
+    loadCities();
+  });
+  
+  async function loadCities() {
+    const cityTableBody = document.getElementById('city-table');
+    cityTableBody.innerHTML = '';
+    const cities = await getCities().sort((a, b) => {
+      const stateCompare = a.stateName.localeCompare(b.stateName);
+      if (stateCompare !== 0) return stateCompare;
+      return a.name.localeCompare(b.name);
+    });
+    
+    if (cities.length === 0) {
+      cityTableBody.innerHTML = '<tr><td colspan="3">No cities found</td></tr>';
+      return;
+    }
+    
+    cities.forEach(city => {
+      const row = cityTableBody.insertRow();
+      row.insertCell(0).textContent = city.stateName;
+      row.insertCell(1).textContent = city.name;
+      const actionsCell = row.insertCell(2);
+      actionsCell.innerHTML = `
+        <button onclick="editCity('${city.id}', '${city.stateId}', '${city.name}')">Edit</button>
+        <button onclick="deleteCity('${city.id}')">Delete</button>
+      `;
+    });
+  }
+  
+  async function editCity(docId, currentStateId, currentCityName) {
+    showConfirm(`Edit city name from "${currentCityName}"?`, async (confirmed) => {
+      if (confirmed) {
+        const newCityName = prompt('Enter new name for the city:', currentCityName);
+        if (newCityName && newCityName.trim() !== '' && newCityName.trim().toLowerCase() !== currentCityName.toLowerCase()) {
+          let cities = await getCities();
+          const index = cities.findIndex(c => c.id === docId);
+          if (index !== -1) {
+            if (cities.some(c => c.stateId === currentStateId && c.name.toLowerCase() === newCityName.trim().toLowerCase() && c.id !== docId)) {
+              showAlert('City with this new name already exists in the same state!');
+              return;
+            }
+            cities[index].name = newCityName.trim();
+            await saveCitiesData(cities);
+            showAlert('City updated successfully!');
+            loadCities();
+          }
+        } else if (newCityName !== null) {
+          showAlert('City name not changed or invalid.');
+        }
+      }
+    });
+  }
+  
+  function deleteCity(docId) {
+    showConfirm('Are you sure you want to delete this city?', async (confirmed) => {
+      if (confirmed) {
+        let cities = await getCities();
+        cities = cities.filter(c => c.id !== docId);
+        await saveCitiesData(cities);
+        showAlert('City deleted successfully!');
+        loadCities();
+      }
+    });
+  }
+  
+  async function searchCity() {
+    const searchTerm = document.getElementById('search-city').value.toLowerCase();
+    const cityTableBody = document.getElementById('city-table');
+    cityTableBody.innerHTML = '';
+    const cities = await getCities();
+    const filteredCities = cities.filter(city =>
+      city.name.toLowerCase().includes(searchTerm) ||
+      city.stateName.toLowerCase().includes(searchTerm)
+    ).sort((a, b) => {
+      const stateCompare = a.stateName.localeCompare(b.stateName);
+      if (stateCompare !== 0) return stateCompare;
+      return a.name.localeCompare(b.name);
+    });
+    
+    if (filteredCities.length === 0) {
+      cityTableBody.innerHTML = '<tr><td colspan="3">No matching cities found</td></tr>';
+      return;
+    }
+    
+    filteredCities.forEach(city => {
+      const row = cityTableBody.insertRow();
+      row.insertCell(0).textContent = city.stateName;
+      row.insertCell(1).textContent = city.name;
+      const actionsCell = row.insertCell(2);
+      actionsCell.innerHTML = `
+        <button onclick="editCity('${city.id}', '${city.stateId}', '${city.name}')">Edit</button>
+        <button onclick="deleteCity('${city.id}')">Delete</button>
+      `;
+    });
+  }
+  
+  // --- User Profile ---
+  
+  function getUserProfile(employeeId = currentEmployeeId) {
+    if (!employeeId) return {};
+    const profile = localStorage.getItem(`userProfile_${employeeId}`);
+    return profile ? JSON.parse(profile) : {};
+  }
+  
+  function saveUserProfile(profile) {
+    if (!profile.employeeId) {
+        showAlert('Employee ID is required to save profile.');
+        return;
+    }
+    localStorage.setItem(`userProfile_${profile.employeeId}`, JSON.stringify(profile));
+  }
+  
+  function getAllUserProfiles() {
+    const profiles = [];
+    for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key.startsWith('userProfile_')) {
+            profiles.push(JSON.parse(localStorage.getItem(key)));
+        }
+    }
+    return profiles;
+  }
+  
+  function loadUserProfile() {
+    if (!currentEmployeeId) {
+        showAlert('Please login to view your profile.');
+        return;
+    }
+    
+    const profile = getUserProfile();
+    document.getElementById('profile-name').value = profile.name || '';
+    document.getElementById('profile-employee-id').value = currentEmployeeId;
+    document.getElementById('profile-mobile-no').value = profile.mobileNo || '';
+    document.getElementById('profile-email-id').value = profile.emailId || '';
+    document.getElementById('profile-password').value = profile.password || '';
+    document.getElementById('profile-preview').src = profile.photoUrl || 'https://storage.googleapis.com/workspace-0f70711f-8b4e-4d94-86f1-2a93ccde5887/image/99a20669-ecb4-4325-a970-491b8dac39a9.png';
+    updateSidebarProfile(profile.name, currentEmployeeId, profile.photoUrl);
+  }
+  
+  document.getElementById('profile-form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    if (!currentEmployeeId) {
+        showAlert('Please login to save your profile.');
+        return;
+    }
+    
+    const name = document.getElementById('profile-name').value;
+    const employeeId = document.getElementById('profile-employee-id').value;
+    const mobileNo = document.getElementById('profile-mobile-no').value;
+    const emailId = document.getElementById('profile-email-id').value;
+    const password = document.getElementById('profile-password').value;
+    const photoFile = document.getElementById('upload-photo').files[0];
+    
+    let currentProfile = getUserProfile(employeeId);
+    let photoUrl = currentProfile.photoUrl || 'https://storage.googleapis.com/workspace-0f70711f-8b4e-4d94-86f1-2a93ccde5887/image/99a20669-ecb4-4325-a970-491b8dac39a9.png';
+    
+    if (photoFile) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        photoUrl = event.target.result;
+        const updatedProfile = { employeeId, name, mobileNo, emailId, password, photoUrl };
+        saveUserProfile(updatedProfile);
+        showAlert('Profile saved successfully!');
+        updateSidebarProfile(name, employeeId, photoUrl);
+      };
+      reader.readAsDataURL(photoFile);
+    } else {
+      const updatedProfile = { employeeId, name, mobileNo, emailId, password, photoUrl };
+      saveUserProfile(updatedProfile);
+      showAlert('Profile saved successfully!');
+      updateSidebarProfile(name, employeeId, photoUrl);
+    }
+  });
+  
+  document.getElementById('upload-photo').addEventListener('change', function(event) {
+    const file = event.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        document.getElementById('profile-preview').src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+  });
+  
+  function updateSidebarProfile(name, id, photoUrl) {
+    if (currentUserRole === 'admin') {
+        const profile = getUserProfile(id);
+        const displayName = profile.name || id.replace('ADM-', '') || "Admin User";
+        document.getElementById('sidebar-employee-name').textContent = displayName;
+        document.getElementById('sidebar-employee-id').textContent = id;
+    } else {
+        document.getElementById('sidebar-employee-name').textContent = name || "Employee Name";
+        document.getElementById('sidebar-employee-id').textContent = id || "EMP-ID";
+    }
+    document.getElementById('sidebar-profile-photo').src = photoUrl || 'https://storage.googleapis.com/workspace-0f70711f-8b4e-4d94-86f1-2a93ccde5887/image/b480eacc-40ca-4251-4c52-b6c5587b3aa7.png';
+  }
+  
+  // --- Admin Profile Management ---
+  
+  function loadAdminDetails() {
+      if (currentUserRole !== 'admin') {
+          document.getElementById('admin-details-table').innerHTML = '<tr><td colspan="5">Access Denied</td></tr>';
+          return;
+      }
+      
+      const adminTableBody = document.getElementById('admin-details-table');
+      adminTableBody.innerHTML = '';
+      const allAdminProfiles = getAllUserProfiles().filter(p => p.employeeId.startsWith('ADM-'));
+      
+      if (allAdminProfiles.length === 0) {
+          adminTableBody.innerHTML = '<tr><td colspan="5">No admin profiles found. Please ensure at least one admin logs in to create their profile.</td></tr>';
+          return;
+      }
+      
+      allAdminProfiles.forEach(adminProfile => {
+          const row = adminTableBody.insertRow();
+          row.insertCell(0).textContent = adminProfile.employeeId || 'N/A';
+          row.insertCell(1).textContent = adminProfile.name || adminProfile.employeeId.replace('ADM-', '') || 'Admin User';
+          row.insertCell(2).textContent = adminProfile.mobileNo || 'N/A';
+          row.insertCell(3).textContent = adminProfile.emailId || 'N/A';
+          const actionsCell = row.insertCell(4);
+          actionsCell.innerHTML = `
+              <button onclick="adminEditEmployee('${adminProfile.employeeId}')">Edit</button>
+              <button onclick="adminDeleteEmployee('${adminProfile.employeeId}')">Delete</button>
+          `;
+      });
+  }
+  
+  // --- Employee Management (Admin Only - for non-admin employees) ---
+  
+  const _orig_loadEmployeeDetails = window.loadEmployeeDetails;
+  window.loadEmployeeDetails = async function() {
+    if (currentUserRole !== 'admin') {
+      document.getElementById('employee-details-table').innerHTML = '<tr><td colspan="5">Access Denied</td></tr>';
+      return;
+    }
+    
+    if (CONFIG.USE_REMOTE && TOKEN) {
+      try {
+        const users = await TrackerAPI.getUsers();
+        const employeeTableBody = document.getElementById('employee-details-table');
+        employeeTableBody.innerHTML = '';
+        
+        const nonAdminEmployees = users.filter(u => u.role !== 'admin');
+        
+        if (nonAdminEmployees.length === 0) {
+          employeeTableBody.innerHTML = '<tr><td colspan="5">No employee profiles found.</td></tr>';
+          return;
+        }
+        
+        nonAdminEmployees.forEach(user => {
+          const row = employeeTableBody.insertRow();
+          row.insertCell(0).textContent = user.employeeId || 'N/A';
+          row.insertCell(1).textContent = user.name || 'N/A';
+          row.insertCell(2).textContent = user.mobileNo || 'N/A';
+          row.insertCell(3).textContent = user.emailId || 'N/A';
+          const actionsCell = row.insertCell(4);
+          actionsCell.innerHTML = `
+            <button onclick="adminEditEmployee('${user.id}')">Edit</button>
+            <button onclick="adminDeleteEmployee('${user.id}')">Delete</button>
+          `;
+        });
+        
+        return;
+      } catch (e) {
+        console.error('Failed to fetch from backend, using local storage', e);
+      }
+    }
+    
+    // Fallback to local storage
+    if (typeof _orig_loadEmployeeDetails === 'function') {
+      return _orig_loadEmployeeDetails();
+    }
+  };
+  
+  function loadEmployeeDetails() {
+      if (currentUserRole !== 'admin') {
+          document.getElementById('employee-details-table').innerHTML = '<tr><td colspan="5">Access Denied</td></tr>';
+          return;
+      }
+      
+      const employeeTableBody = document.getElementById('employee-details-table');
+      employeeTableBody.innerHTML = '';
+      const allProfiles = getAllUserProfiles();
+      const nonAdminEmployeeProfiles = allProfiles.filter(p => !p.employeeId.startsWith('ADM-'));
+      
+      if (nonAdminEmployeeProfiles.length === 0) {
+          employeeTableBody.innerHTML = '<tr><td colspan="5">No employee profiles found.</td></tr>';
+          return;
+      }
+      
+      nonAdminEmployeeProfiles.forEach(profile => {
+          const row = employeeTableBody.insertRow();
+          row.insertCell(0).textContent = profile.employeeId || 'N/A';
+          row.insertCell(1).textContent = profile.name || 'N/A';
+          row.insertCell(2).textContent = profile.mobileNo || 'N/A';
+          row.insertCell(3).textContent = profile.emailId || 'N/A';
+          const actionsCell = row.insertCell(4);
+          actionsCell.innerHTML = `
+              <button onclick="adminEditEmployee('${profile.employeeId}')">Edit</button>
+              <button onclick="adminDeleteEmployee('${profile.employeeId}')">Delete</button>
+          `;
+      });
+  }
+  
+  function adminEditEmployee(employeeId) {
+      if (currentUserRole !== 'admin') {
+          showAlert('Access Denied.');
+          return;
+      }
+      
+      const profile = getUserProfile(employeeId);
+      if (profile) {
+          if (employeeId.startsWith('ADM-')) {
+              const newName = prompt(`Edit name for Admin (${employeeId}):`, profile.name || employeeId.replace('ADM-', ''));
+              if (newName !== null && newName.trim() !== '') {
+                  profile.name = newName.trim();
+                  saveUserProfile(profile);
+                  showAlert('Admin name updated.');
+              }
+              
+              const newMobile = prompt(`Edit mobile number for Admin (${employeeId}):`, profile.mobileNo);
+              if (newMobile !== null && newMobile.trim() !== '') {
+                  profile.mobileNo = newMobile.trim();
+                  saveUserProfile(profile);
+                  showAlert('Admin mobile number updated.');
+              }
+              
+              const newEmail = prompt(`Edit email for Admin (${employeeId}):`, profile.emailId);
+              if (newEmail !== null && newEmail.trim() !== '') {
+                  profile.emailId = newEmail.trim();
+                  saveUserProfile(profile);
+                  showAlert('Admin email updated.');
+              }
+              
+              loadAdminDetails();
+          } else {
+              const newName = prompt(`Edit name for ${employeeId}:`, profile.name);
+              if (newName !== null && newName.trim() !== '') {
+                  profile.name = newName.trim();
+                  saveUserProfile(profile);
+                  showAlert('Employee name updated.');
+              }
+              
+              const newMobile = prompt(`Edit mobile number for ${employeeId}:`, profile.mobileNo);
+              if (newMobile !== null && newMobile.trim() !== '') {
+                  profile.mobileNo = newMobile.trim();
+                  saveUserProfile(profile);
+                  showAlert('Employee mobile number updated.');
+              }
+              
+              const newEmail = prompt(`Edit email for ${employeeId}:`, profile.emailId);
+              if (newEmail !== null && newEmail.trim() !== '') {
+                  profile.emailId = newEmail.trim();
+                  saveUserProfile(profile);
+                  showAlert('Employee email updated.');
+              }
+              
+              loadEmployeeDetails();
+          }
+      } else {
+          showAlert('Profile not found.');
+      }
+  }
+  
+  function openAddEmployeeModal() {
+    if (currentUserRole !== 'admin') {
+      showAlert('Only administrators can add new employees');
+      return;
+    }
+    document.getElementById('addEmployeeModal').style.display = 'flex';
+    document.getElementById('add-employee-form').reset();
+  }
+  
+  function closeAddEmployeeModal() {
+    document.getElementById('addEmployeeModal').style.display = 'none';
+    document.getElementById('add-employee-form').reset();
+  }
+  
+  document.getElementById('add-employee-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const id = document.getElementById('new-employee-id').value.trim().toUpperCase();
+    const name = document.getElementById('new-employee-name').value.trim();
+    const mobile = document.getElementById('new-employee-mobile').value.trim();
+    const email = document.getElementById('new-employee-email').value.trim();
+    const password = document.getElementById('new-employee-password').value;
+    
+    if (!/^SCS-\d{5,6}$/.test(id)) {
+      showAlert('Employee ID must be in format SCS- followed by 5 or 6 digits (e.g., SCS-12345 or SCS-123456).');
+      return;
+    }
+    
+    if (CONFIG.USE_REMOTE && TOKEN) {
+      try {
+        await TrackerAPI.createUser({
+          role: 'employee',
+          name: name,
+          emailId: email,
+          mobileNo: mobile,
+          employeeId: id,
+          password: password
+        });
+        
+        showAlert(`Employee ${id} added successfully!`);
+        closeAddEmployeeModal();
+        loadEmployeeDetails();
+        return;
+      } catch (e) {
+        console.error('Failed to create user in backend, falling back to local', e);
+      }
+    }
+    
+    // Fallback to local storage
+    const newProfile = {
+      employeeId: id,
+      name: name,
+      mobileNo: mobile,
+      emailId: email,
+      password: password,
+      photoUrl: 'https://storage.googleapis.com/workspace-0f70711f-8b4e-4d94-86f1-2a93ccde5887/image/default-employee.png'
+    };
+    
+    if (localStorage.getItem(`userProfile_${id}`)) {
+      showAlert('An employee with this ID already exists!');
+      return;
+    }
+    
+    saveUserProfile(newProfile);
+    showAlert(`Employee ${id} added successfully!`);
+    closeAddEmployeeModal();
+    loadEmployeeDetails();
+    populateEmployeeFilter();
+  });
+  
+  // --- Admin Management (Add Admin Modal) ---
+  
+  function openAddAdminModal() {
+    if (currentUserRole !== 'admin') {
+      showAlert('Only administrators can add new admins.');
+      return;
+    }
+    document.getElementById('addAdminModal').style.display = 'flex';
+    document.getElementById('add-admin-form').reset();
+  }
+  
+  function closeAddAdminModal() {
+    document.getElementById('addAdminModal').style.display = 'none';
+    document.getElementById('add-admin-form').reset();
+  }
+  
+  document.getElementById('add-admin-form').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const username = document.getElementById('new-admin-username').value.trim().toUpperCase();
+    const name = document.getElementById('new-admin-name').value.trim();
+    const mobile = document.getElementById('new-admin-mobile').value.trim();
+    const email = document.getElementById('new-admin-email').value.trim();
+    const password = document.getElementById('new-admin-password').value;
+    
+    if (!/^ADM-[A-Za-z\s]+$/.test(username)) {
+      showAlert('Admin Username must be in format ADM- followed by letters and spaces (e.g., ADM-JohnDoe).');
+      return;
+    }
+    
+    // Check if the username is already in the allowedAdminUsernames array
+    if (allowedAdminUsernames.includes(username)) {
+        showAlert('This Admin Username is already pre-defined in the system.');
+        return;
+    }
+    
+    // Check if a profile with this username already exists in localStorage
+    if (localStorage.getItem(`userProfile_${username}`)) {
+      showAlert('An admin with this username already exists!');
+      return;
+    }
+    
+    const newAdminProfile = {
+      employeeId: username, // Using employeeId field for admin username
+      name: name,
+      mobileNo: mobile,
+      emailId: email,
+      password: password,
+      photoUrl: 'https://storage.googleapis.com/workspace-0f70711f-8b4e-4d94-86f1-2a93ccde5887/image/default-employee.png' // Default photo for new admins
+    };
+    
+    saveUserProfile(newAdminProfile);
+    showAlert(`Admin ${username} added successfully!`);
+    closeAddAdminModal();
+    loadAdminDetails(); // Reload admin details table
+  });
+  
+  function adminDeleteEmployee(employeeId) {
+      if (currentUserRole !== 'admin') {
+          showAlert('Access Denied.');
+          return;
+      }
+      
+      if (employeeId === currentEmployeeId) {
+          showAlert('You cannot delete the currently logged-in Admin profile from this interface.');
+          return;
+      }
+      
+      // Allow deletion of dynamically added admins (those not in the hardcoded list)
+      // For hardcoded admins, prevent deletion from this UI
+      if (employeeId.startsWith('ADM-') && allowedAdminUsernames.includes(employeeId)) {
+          showAlert('Pre-defined Admin profiles cannot be deleted from this section. They are hardcoded.');
+          return;
+      }
+      
+      showConfirm(`Are you sure you want to delete ${employeeId.startsWith('ADM-') ? 'admin' : 'employee'} ${employeeId} and all their associated data (attendance, visits, follow-ups)?`, async (confirmed) => {
+          if (confirmed) {
+              // --- CRITICAL: Remove the user profile to de-authorize login ---
+              localStorage.removeItem(`userProfile_${employeeId}`);
+              // --- END CRITICAL ---
+              
+              let dailyActivityRecords = localStorage.getItem('dailyActivityRecords') ? JSON.parse(localStorage.getItem('dailyActivityRecords')) : [];
+              dailyActivityRecords = dailyActivityRecords.filter(rec => rec.employeeId !== employeeId);
+              localStorage.setItem('dailyActivityRecords', JSON.stringify(dailyActivityRecords));
+              localStorage.removeItem(`currentCheckInSessionId_${employeeId}`);
+              
+              let followUps = localStorage.getItem('followUps') ? JSON.parse(localStorage.getItem('followUps')) : [];
+              followUps = followUps.filter(rec => rec.employeeId !== employeeId);
+              localStorage.setItem('followUps', JSON.stringify(followUps));
+              
+              showAlert(`${employeeId.startsWith('ADM-') ? 'Admin' : 'Employee'} ${employeeId} and all their data deleted successfully!`);
+              
+              if (employeeId.startsWith('ADM-')) {
+                  loadAdminDetails(); // Reload admin details table
+              } else {
+                  loadEmployeeDetails();
+                  populateEmployeeFilter(); // Update employee filter dropdown
+              }
+          }
+      });
+  }
+  
+  // --- Socket.IO Integration ---
+  
+  function initSocketIO() {
+    if (CONFIG.USE_REMOTE && TOKEN) {
+      socket = io(CONFIG.API_BASE);
+      
+      socket.on('connect', () => {
+        console.log('Connected to server');
+        
+        // Join appropriate room based on user role
+        socket.emit('join', {
+          role: currentUserRole,
+          userId: currentEmployeeId
+        });
+      });
+      
+      socket.on('activity_update', (data) => {
+        console.log('Activity update received:', data);
+        
+        // Refresh activity list if on daily-activity page
+        if (document.getElementById('daily-activity').classList.contains('active')) {
+          loadDailyActivity();
+        }
+      });
+      
+      socket.on('disconnect', () => {
+        console.log('Disconnected from server');
+      });
+    }
+  }
+  
+  // --- Offline Detection and Handling ---
+  
+  function setupOfflineDetection() {
+    const updateOnlineStatus = () => {
+      const status = navigator.onLine ? 'online' : 'offline';
+      console.log(`App is ${status}`);
+      
+      const syncStatusElement = document.getElementById('syncStatus');
+      
+      if (status === 'offline') {
+        showAlert('You are offline. Changes will be saved locally and synced when you come back online.');
+        CONFIG.USE_REMOTE = false;
+        syncStatusElement.textContent = 'Offline';
+        syncStatusElement.className = 'sync-status offline';
+      } else {
+        showAlert('You are back online. Syncing data...');
+        CONFIG.USE_REMOTE = true;
+        syncStatusElement.textContent = 'Online';
+        syncStatusElement.className = 'sync-status online';
+        
+        // Try to sync data
+        if (TOKEN) {
+          syncStatusElement.textContent = 'Syncing...';
+          syncStatusElement.className = 'sync-status syncing';
+          
+          TrackerAPI.syncData()
+            .then(() => {
+              showAlert('Data synced successfully!');
+              syncStatusElement.textContent = 'Online';
+              syncStatusElement.className = 'sync-status online';
+            })
+            .catch(e => {
+              console.error('Failed to sync data', e);
+              showAlert('Failed to sync data. Please try manually.');
+              syncStatusElement.textContent = 'Online';
+              syncStatusElement.className = 'sync-status online';
+            });
+        }
+      }
+    };
+    
+    window.addEventListener('online', updateOnlineStatus);
+    window.addEventListener('offline', updateOnlineStatus);
+    
+    // Initial check
+    updateOnlineStatus();
+  }
+</script>
+</body>
+</html>
