@@ -5,11 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Tracker App</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet"/>
-  <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <!-- Leaflet JS -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <!-- Socket.IO -->
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <style>
     :root {
@@ -838,7 +835,7 @@
   
   // Configuration for backend integration
   const CONFIG = {
-    API_BASE: "https://tracker-web-app-backend-5-heo7.onrender.com",
+    API_BASE: "",
     USE_REMOTE: true,
   };
   
@@ -1224,7 +1221,7 @@
   const allowedAdminUsernames = initialAdminData.map(admin => admin.adminId);
   
   // Initial load - show login screen
-  document.addEventListener('DOMContentLoaded', () => {
+  document.addEventListener('DOMContentLoaded', async () => {
     // Pre-populate employee data if not already present in localStorage
     initialEmployeeData.forEach(emp => {
         if (!localStorage.getItem(`userProfile_${emp.employeeId}`)) {
@@ -1254,9 +1251,9 @@
         currentUserRole = lastLoggedInRole;
         currentEmployeeId = lastLoggedInEmployeeId;
         // Retrieve the full profile to update sidebar details correctly
-        const userProfile = getUserProfile(currentEmployeeId);
+        const userProfile = await getUserProfile(currentEmployeeId);
         updateSidebarProfile(userProfile.name, userProfile.employeeId, userProfile.photoUrl);
-        login(); // Call the login function to set up UI and navigate to appropriate section
+        await login(); // Call the login function to set up UI and navigate to appropriate section
     } else {
         showSection('login');
         // Hide sidebar buttons until logged in
@@ -1315,7 +1312,7 @@
     setupOfflineDetection();
   });
   
-  document.getElementById('login-form').addEventListener('submit', (e) => {
+  document.getElementById('login-form').addEventListener('submit', async (e) => {
       e.preventDefault();
       const employeeIdInput = document.getElementById('login-employee-id').value.trim();
       const adminUsernameInput = document.getElementById('login-admin-username').value.trim();
@@ -1329,9 +1326,9 @@
       }
       
       const loginData = { employeeIdInput, adminUsernameInput, passwordInput, mobileNumberInput, roleSelect };
-      showConfirm('Are you sure you want to log in?', (confirmed) => {
+      showConfirm('Are you sure you want to log in?', async (confirmed) => {
           if (confirmed) {
-              processLogin(loginData);
+              await processLogin(loginData);
           } else {
               showAlert('Login cancelled.');
           }
@@ -1362,7 +1359,7 @@
               const res = await TrackerAPI.login(loginData);
               currentUserRole = res.user.role;
               currentEmployeeId = res.user.employeeId || res.user.id;
-              window.login();
+              await login();
               return;
           } catch (e) {
               console.error('Backend login failed, falling back to local', e);
@@ -1389,7 +1386,7 @@
           }
           
           // Retrieve the stored profile to get the correct password and mobile number
-          const employeeProfile = getUserProfile(employeeIdInput);
+          const employeeProfile = await getUserProfile(employeeIdInput);
           
           if (!employeeProfile || !employeeProfile.password || !employeeProfile.mobileNo) {
               showAlert('Employee profile data incomplete. Please contact your administrator.');
@@ -1411,14 +1408,14 @@
           currentUserRole = 'employee';
           currentEmployeeId = employeeIdInput;
           showAlert(`Employee ${employeeIdInput} login successful!`);
-          login();
+          await login();
       } else if (roleSelect === 'admin') {
           if (!adminUsernameInput) {
               showAlert('Please enter Admin Username.');
               return;
           }
           
-          let adminProfile = getUserProfile(adminUsernameInput);
+          let adminProfile = await getUserProfile(adminUsernameInput);
           let isPredefinedAdmin = allowedAdminUsernames.includes(adminUsernameInput);
           
           if (!isPredefinedAdmin && Object.keys(adminProfile).length === 0) {
@@ -1438,7 +1435,7 @@
                       emailId: 'N/A',
                       password: adminCommonPassword
                   };
-                  saveUserProfile(adminProfile);
+                  await saveUserProfile(adminProfile);
               }
               
               // Mobile Number Verification for predefined admins
@@ -1473,11 +1470,11 @@
           currentEmployeeId = adminUsernameInput;
           currentUserRole = 'admin';
           showAlert(`Admin ${adminUsernameInput} login successful!`);
-          login();
+          await login();
       }
   }
   
-  function login() {
+  async function login() {
       document.getElementById('loginBtn').style.display = 'none';
       document.getElementById('logoutBtn').style.display = 'block';
       document.querySelectorAll('.sidebar button:not(#loginBtn):not(#logoutBtn)').forEach(btn => btn.style.display = 'block');
@@ -1490,30 +1487,30 @@
           document.getElementById('employeeManagementBtn').style.display = 'block';
           document.getElementById('adminProfileBtn').style.display = 'block';
           showSection('admin-profile');
-          populateEmployeeFilter();
+          await populateEmployeeFilter();
       } else {
           document.getElementById('employeeManagementBtn').style.display = 'none';
           document.getElementById('adminProfileBtn').style.display = 'none';
           showSection('dashboard');
       }
       
-      updateSidebarProfile();
+      await updateSidebarProfile();
       
       // Initialize Socket.IO for real-time updates
       initSocketIO();
   }
   
   function confirmLogout() {
-      showConfirm('Are you sure you want to log out?', (confirmed) => {
+      showConfirm('Are you sure you want to log out?', async (confirmed) => {
           if (confirmed) {
-              logout();
+              await logout();
           } else {
               showAlert('Logout cancelled.');
           }
       });
   }
   
-  function logout() {
+  async function logout() {
       currentUserRole = null;
       currentEmployeeId = null;
       stopLocationTracking();
@@ -1551,7 +1548,7 @@
   let confirmCallback = null;
   let watchId = null; // Global variable to hold the watchPosition ID
   
-  function showSection(sectionId) {
+  async function showSection(sectionId) {
     // Stop location tracking if navigating away from daily-activity
     if (sectionId !== 'daily-activity') {
         stopLocationTracking();
@@ -1589,12 +1586,12 @@
         // Show/hide employee filter based on role
         if (currentUserRole === 'admin') {
             document.getElementById('employee-filter-container').style.display = 'block';
-            populateEmployeeFilter();
+            await populateEmployeeFilter();
         } else {
             document.getElementById('employee-filter-container').style.display = 'none';
         }
         
-        loadDailyActivity();
+        await loadDailyActivity();
         
         // Start location tracking when entering daily-activity section
         // Only start if there's an active check-in session
@@ -1603,18 +1600,18 @@
             startLocationTracking();
         }
     } else if (sectionId === 'followups') {
-      loadFollowUps();
+      await loadFollowUps();
     } else if (sectionId === 'state') {
-      loadStates();
+      await loadStates();
     } else if (sectionId === 'city') {
-      loadStatesForCitySelect();
-      loadCities();
+      await loadStatesForCitySelect();
+      await loadCities();
     } else if (sectionId === 'profile') {
-      loadUserProfile();
+      await loadUserProfile();
     } else if (sectionId === 'employee-management') {
-        loadEmployeeDetails();
+        await loadEmployeeDetails();
     } else if (sectionId === 'admin-profile') {
-        loadAdminDetails();
+        await loadAdminDetails();
     }
   }
   
@@ -1749,9 +1746,7 @@
   
   // --- Daily Activity (Merged Attendance & Visits) ---
   
-  // Override frontend functions to use backend
-  const _orig_getDailyActivityRecords = window.getDailyActivityRecords;
-  window.getDailyActivityRecords = async function() {
+  async function getDailyActivityRecords() {
     if (CONFIG.USE_REMOTE && TOKEN) {
       try {
         return await TrackerAPI.getDailyActivityRecords();
@@ -1760,14 +1755,15 @@
       }
     }
     
-    if (typeof _orig_getDailyActivityRecords === 'function') {
-      return _orig_getDailyActivityRecords();
+    const allRecords = localStorage.getItem('dailyActivityRecords') ? JSON.parse(localStorage.getItem('dailyActivityRecords')) : [];
+    if (currentUserRole === 'admin') {
+        return allRecords;
+    } else {
+        return allRecords.filter(rec => rec.employeeId === currentEmployeeId);
     }
-    return [];
-  };
+  }
   
-  const _orig_saveDailyActivityRecords = window.saveDailyActivityRecords;
-  window.saveDailyActivityRecords = async function(records) {
+  async function saveDailyActivityRecords(records) {
     if (CONFIG.USE_REMOTE && TOKEN) {
       try {
         await TrackerAPI.saveDailyActivityRecords(records);
@@ -1777,21 +1773,6 @@
       }
     }
     
-    if (typeof _orig_saveDailyActivityRecords === 'function') {
-      return _orig_saveDailyActivityRecords(records);
-    }
-  };
-  
-  function getDailyActivityRecords() {
-    const allRecords = localStorage.getItem('dailyActivityRecords') ? JSON.parse(localStorage.getItem('dailyActivityRecords')) : [];
-    if (currentUserRole === 'admin') {
-        return allRecords;
-    } else {
-        return allRecords.filter(rec => rec.employeeId === currentEmployeeId);
-    }
-  }
-  
-  function saveDailyActivityRecords(records) {
     if (currentUserRole === 'admin') {
         localStorage.setItem('dailyActivityRecords', JSON.stringify(records));
     } else {
@@ -1849,7 +1830,7 @@
     // Start live location tracking immediately
     startLocationTracking();
     
-    loadDailyActivity(); // Reload table to show new check-in
+    await loadDailyActivity(); // Reload table to show new check-in
     
     // Show Log Visit Modal
     document.getElementById('log-visit-checkin-id').value = newCheckInRecord.id;
@@ -1896,7 +1877,7 @@
     localStorage.removeItem(`currentCheckInSessionId_${currentEmployeeId}`); // Clear the active session ID
     showAlert(`Checked out at ${now.toLocaleTimeString()}`);
     stopLocationTracking(); // Stop live location tracking
-    loadDailyActivity(); // Reload table to show new check-out
+    await loadDailyActivity(); // Reload table to show new check-out
   }
   
   document.getElementById('log-visit-form').addEventListener('submit', async (e) => {
@@ -1976,13 +1957,13 @@
     
     showAlert('Visit logged successfully and added to Follow Ups!');
     closeLogVisitModal();
-    loadDailyActivity();
-    loadFollowUps(); // Reload follow-ups to show the new entry
+    await loadDailyActivity();
+    await loadFollowUps(); // Reload follow-ups to show the new entry
   });
   
-  function skipVisit() {
+  async function skipVisit() {
     const checkInId = document.getElementById('log-visit-checkin-id').value;
-    let records = getDailyActivityRecords();
+    let records = await getDailyActivityRecords();
     const now = new Date();
     
     // Get current live location data at the time of skipping
@@ -2002,7 +1983,7 @@
         skippedMapLink = `https://www.openstreetmap.org/?mlat=${currentLat}&mlon=${currentLng}#map=15/${currentLat}/${currentLng}`;
     }
     
-    // Optionally, log a "Skipped Visit" record
+    // Log a "Skipped Visit" record
     const newSkippedVisitRecord = {
         id: generateUniqueId('ACT-'),
         employeeId: currentEmployeeId,
@@ -2015,10 +1996,10 @@
     };
     
     records.push(newSkippedVisitRecord);
-    saveDailyActivityRecords(records);
+    await saveDailyActivityRecords(records);
     showAlert('Visit skipped.');
     closeLogVisitModal();
-    loadDailyActivity(); // Reload to show the skipped visit if logged
+    await loadDailyActivity(); // Reload to show the skipped visit if logged
   }
   
   function closeLogVisitModal() {
@@ -2027,10 +2008,10 @@
     document.getElementById('log-visit-checkin-id').value = '';
   }
   
-  function populateEmployeeFilter() {
+  async function populateEmployeeFilter() {
       const employeeFilter = document.getElementById('activity-employee-filter');
       employeeFilter.innerHTML = '<option value="">All Employees</option>'; // Default option
-      const allProfiles = getAllUserProfiles();
+      const allProfiles = await getAllUserProfiles();
       const employeeProfiles = allProfiles.filter(p => !p.employeeId.startsWith('ADM-')); // Exclude admins
       employeeProfiles.sort((a, b) => a.employeeId.localeCompare(b.employeeId));
       employeeProfiles.forEach(profile => {
@@ -2329,9 +2310,7 @@
   
   // --- Follow Ups ---
   
-  // Override frontend functions to use backend
-  const _orig_getFollowUps = window.getFollowUps;
-  window.getFollowUps = async function() {
+  async function getFollowUps() {
     if (CONFIG.USE_REMOTE && TOKEN) {
       try {
         return await TrackerAPI.getFollowUps();
@@ -2340,14 +2319,15 @@
       }
     }
     
-    if (typeof _orig_getFollowUps === 'function') {
-      return _orig_getFollowUps();
+    const allFollowups = localStorage.getItem('followUps') ? JSON.parse(localStorage.getItem('followUps')) : [];
+    if (currentUserRole === 'admin') {
+        return allFollowups;
+    } else {
+        return allFollowups.filter(f => f.employeeId === currentEmployeeId);
     }
-    return [];
-  };
+  }
   
-  const _orig_saveFollowUps = window.saveFollowUps;
-  window.saveFollowUps = async function(followups) {
+  async function saveFollowUps(followups) {
     if (CONFIG.USE_REMOTE && TOKEN) {
       try {
         await TrackerAPI.saveFollowUps(followups);
@@ -2357,21 +2337,6 @@
       }
     }
     
-    if (typeof _orig_saveFollowUps === 'function') {
-      return _orig_saveFollowUps(followups);
-    }
-  };
-  
-  function getFollowUps() {
-    const allFollowups = localStorage.getItem('followUps') ? JSON.parse(localStorage.getItem('followUps')) : [];
-    if (currentUserRole === 'admin') {
-        return allFollowups;
-    } else {
-        return allFollowups.filter(f => f.employeeId === currentEmployeeId);
-    }
-  }
-  
-  function saveFollowUps(followups) {
     if (currentUserRole === 'admin') {
         localStorage.setItem('followUps', JSON.stringify(followups));
     } else {
@@ -2397,30 +2362,35 @@
     const note = document.getElementById('followup-note').value;
     const docId = document.getElementById('followup-doc-id') ? document.getElementById('followup-doc-id').value : '';
     
-    let followups = await getFollowUps();
-    if (docId) {
-      const index = followups.findIndex(f => f.id === docId);
-      if (index !== -1) {
-        followups[index] = { id: docId, employeeId: currentEmployeeId, subject, datetime, note, createdAt: followups[index].createdAt };
-        showAlert('Follow-up updated successfully!');
-      }
-    } else {
-      const newFollowUp = {
-        id: generateUniqueId('FUP-'),
-        employeeId: currentEmployeeId,
-        subject,
-        datetime,
-        note,
-        createdAt: new Date().toISOString()
-      };
-      followups.push(newFollowUp);
-      showAlert('Follow-up added successfully!');
+    try {
+        let followups = await getFollowUps();
+        if (docId) {
+          const index = followups.findIndex(f => f.id === docId);
+          if (index !== -1) {
+            followups[index] = { id: docId, employeeId: currentEmployeeId, subject, datetime, note, createdAt: followups[index].createdAt };
+            showAlert('Follow-up updated successfully!');
+          }
+        } else {
+          const newFollowUp = {
+            id: generateUniqueId('FUP-'),
+            employeeId: currentEmployeeId,
+            subject,
+            datetime,
+            note,
+            createdAt: new Date().toISOString()
+          };
+          followups.push(newFollowUp);
+          showAlert('Follow-up added successfully!');
+        }
+        
+        await saveFollowUps(followups);
+        document.getElementById('followup-form').reset();
+        if (document.getElementById('followup-doc-id')) document.getElementById('followup-doc-id').value = '';
+        await loadFollowUps();
+    } catch (error) {
+        console.error('Error saving follow-up:', error);
+        showAlert('Failed to save follow-up. Please try again.');
     }
-    
-    await saveFollowUps(followups);
-    document.getElementById('followup-form').reset();
-    if (document.getElementById('followup-doc-id')) document.getElementById('followup-doc-id').value = '';
-    loadFollowUps();
   });
   
   async function loadFollowUps() {
@@ -2428,7 +2398,9 @@
     
     const followupTableBody = document.getElementById('followup-table');
     followupTableBody.innerHTML = '';
-    const followups = await getFollowUps().sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    
+    // Fixed: Properly await the getFollowUps function before sorting
+    const followups = (await getFollowUps()).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
     const employeeIdHeader = document.getElementById('followup-employee-id-header');
     const employeeNameHeader = document.getElementById('followup-employee-name-header');
     
@@ -2489,23 +2461,21 @@
     }
   }
   
-  function deleteFollowUp(docId) {
+  async function deleteFollowUp(docId) {
     showConfirm('Are you sure you want to delete this follow-up?', async (confirmed) => {
       if (confirmed) {
         let followups = await getFollowUps();
         followups = followups.filter(f => f.id !== docId);
         await saveFollowUps(followups);
         showAlert('Follow-up deleted successfully!');
-        loadFollowUps();
+        await loadFollowUps();
       }
     });
   }
   
   // --- State Management ---
   
-  // Override frontend functions to use backend
-  const _orig_getStates = window.getStates;
-  window.getStates = async function() {
+  async function getStates() {
     if (CONFIG.USE_REMOTE && TOKEN) {
       try {
         return await TrackerAPI.getStates();
@@ -2514,14 +2484,11 @@
       }
     }
     
-    if (typeof _orig_getStates === 'function') {
-      return _orig_getStates();
-    }
-    return [];
-  };
+    const states = localStorage.getItem('states');
+    return states ? JSON.parse(states) : [];
+  }
   
-  const _orig_saveStatesData = window.saveStatesData;
-  window.saveStatesData = async function(states) {
+  async function saveStatesData(states) {
     if (CONFIG.USE_REMOTE && TOKEN) {
       try {
         await TrackerAPI.saveStates(states);
@@ -2531,17 +2498,6 @@
       }
     }
     
-    if (typeof _orig_saveStatesData === 'function') {
-      return _orig_saveStatesData(states);
-    }
-  };
-  
-  function getStates() {
-    const states = localStorage.getItem('states');
-    return states ? JSON.parse(states) : [];
-  }
-  
-  function saveStatesData(states) {
     localStorage.setItem('states', JSON.stringify(states));
   }
   
@@ -2571,13 +2527,15 @@
     await saveStatesData(states);
     showAlert('State added successfully!');
     stateNameInput.value = '';
-    loadStates();
+    await loadStates();
   });
   
   async function loadStates() {
     const stateTableBody = document.getElementById('state-table');
     stateTableBody.innerHTML = '';
-    const states = await getStates().sort((a, b) => a.name.localeCompare(b.name));
+    
+    // Fixed: Properly await the getStates function before sorting
+    const states = (await getStates()).sort((a, b) => a.name.localeCompare(b.name));
     
     if (states.length === 0) {
       stateTableBody.innerHTML = '<tr><td colspan="2">No states found</td></tr>';
@@ -2610,7 +2568,7 @@
             states[index].name = newName.trim();
             await saveStatesData(states);
             showAlert('State updated successfully!');
-            loadStates();
+            await loadStates();
             
             let cities = await getCities();
             cities.forEach(city => {
@@ -2627,7 +2585,7 @@
     });
   }
   
-  function deleteState(docId) {
+  async function deleteState(docId) {
     showConfirm('Are you sure you want to delete this state? This will also delete all cities associated with it.', async (confirmed) => {
       if (confirmed) {
         let states = await getStates();
@@ -2639,7 +2597,7 @@
         await saveCitiesData(cities);
         
         showAlert('State and associated cities deleted successfully!');
-        loadStates();
+        await loadStates();
       }
     });
   }
@@ -2648,17 +2606,18 @@
     const searchTerm = document.getElementById('search-state').value.toLowerCase();
     const stateTableBody = document.getElementById('state-table');
     stateTableBody.innerHTML = '';
-    const states = await getStates();
-    const filteredStates = states.filter(state =>
+    
+    // Fixed: Properly await the getStates function before filtering and sorting
+    const states = (await getStates()).filter(state =>
       state.name.toLowerCase().includes(searchTerm)
     ).sort((a, b) => a.name.localeCompare(b.name));
     
-    if (filteredStates.length === 0) {
+    if (states.length === 0) {
       stateTableBody.innerHTML = '<tr><td colspan="2">No matching states found</td></tr>';
       return;
     }
     
-    filteredStates.forEach(state => {
+    states.forEach(state => {
       const row = stateTableBody.insertRow();
       row.insertCell(0).textContent = state.name;
       const actionsCell = row.insertCell(1);
@@ -2671,9 +2630,7 @@
   
   // --- City Management ---
   
-  // Override frontend functions to use backend
-  const _orig_getCities = window.getCities;
-  window.getCities = async function() {
+  async function getCities() {
     if (CONFIG.USE_REMOTE && TOKEN) {
       try {
         return await TrackerAPI.getCities();
@@ -2682,14 +2639,11 @@
       }
     }
     
-    if (typeof _orig_getCities === 'function') {
-      return _orig_getCities();
-    }
-    return [];
-  };
+    const cities = localStorage.getItem('cities');
+    return cities ? JSON.parse(cities) : [];
+  }
   
-  const _orig_saveCitiesData = window.saveCitiesData;
-  window.saveCitiesData = async function(cities) {
+  async function saveCitiesData(cities) {
     if (CONFIG.USE_REMOTE && TOKEN) {
       try {
         await TrackerAPI.saveCities(cities);
@@ -2699,17 +2653,6 @@
       }
     }
     
-    if (typeof _orig_saveCitiesData === 'function') {
-      return _orig_saveCitiesData(cities);
-    }
-  };
-  
-  function getCities() {
-    const cities = localStorage.getItem('cities');
-    return cities ? JSON.parse(cities) : [];
-  }
-  
-  function saveCitiesData(cities) {
     localStorage.setItem('cities', JSON.stringify(cities));
   }
   
@@ -2757,13 +2700,15 @@
     showAlert('City added successfully!');
     cityNameInput.value = '';
     stateSelect.value = '';
-    loadCities();
+    await loadCities();
   });
   
   async function loadCities() {
     const cityTableBody = document.getElementById('city-table');
     cityTableBody.innerHTML = '';
-    const cities = await getCities().sort((a, b) => {
+    
+    // Fixed: Properly await the getCities function before sorting
+    const cities = (await getCities()).sort((a, b) => {
       const stateCompare = a.stateName.localeCompare(b.stateName);
       if (stateCompare !== 0) return stateCompare;
       return a.name.localeCompare(b.name);
@@ -2801,7 +2746,7 @@
             cities[index].name = newCityName.trim();
             await saveCitiesData(cities);
             showAlert('City updated successfully!');
-            loadCities();
+            await loadCities();
           }
         } else if (newCityName !== null) {
           showAlert('City name not changed or invalid.');
@@ -2810,14 +2755,14 @@
     });
   }
   
-  function deleteCity(docId) {
+  async function deleteCity(docId) {
     showConfirm('Are you sure you want to delete this city?', async (confirmed) => {
       if (confirmed) {
         let cities = await getCities();
         cities = cities.filter(c => c.id !== docId);
         await saveCitiesData(cities);
         showAlert('City deleted successfully!');
-        loadCities();
+        await loadCities();
       }
     });
   }
@@ -2826,8 +2771,9 @@
     const searchTerm = document.getElementById('search-city').value.toLowerCase();
     const cityTableBody = document.getElementById('city-table');
     cityTableBody.innerHTML = '';
-    const cities = await getCities();
-    const filteredCities = cities.filter(city =>
+    
+    // Fixed: Properly await the getCities function before filtering and sorting
+    const cities = (await getCities()).filter(city =>
       city.name.toLowerCase().includes(searchTerm) ||
       city.stateName.toLowerCase().includes(searchTerm)
     ).sort((a, b) => {
@@ -2836,12 +2782,12 @@
       return a.name.localeCompare(b.name);
     });
     
-    if (filteredCities.length === 0) {
+    if (cities.length === 0) {
       cityTableBody.innerHTML = '<tr><td colspan="3">No matching cities found</td></tr>';
       return;
     }
     
-    filteredCities.forEach(city => {
+    cities.forEach(city => {
       const row = cityTableBody.insertRow();
       row.insertCell(0).textContent = city.stateName;
       row.insertCell(1).textContent = city.name;
@@ -2855,13 +2801,13 @@
   
   // --- User Profile ---
   
-  function getUserProfile(employeeId = currentEmployeeId) {
+  async function getUserProfile(employeeId = currentEmployeeId) {
     if (!employeeId) return {};
     const profile = localStorage.getItem(`userProfile_${employeeId}`);
     return profile ? JSON.parse(profile) : {};
   }
   
-  function saveUserProfile(profile) {
+  async function saveUserProfile(profile) {
     if (!profile.employeeId) {
         showAlert('Employee ID is required to save profile.');
         return;
@@ -2869,7 +2815,7 @@
     localStorage.setItem(`userProfile_${profile.employeeId}`, JSON.stringify(profile));
   }
   
-  function getAllUserProfiles() {
+  async function getAllUserProfiles() {
     const profiles = [];
     for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
@@ -2880,23 +2826,23 @@
     return profiles;
   }
   
-  function loadUserProfile() {
+  async function loadUserProfile() {
     if (!currentEmployeeId) {
         showAlert('Please login to view your profile.');
         return;
     }
     
-    const profile = getUserProfile();
+    const profile = await getUserProfile();
     document.getElementById('profile-name').value = profile.name || '';
     document.getElementById('profile-employee-id').value = currentEmployeeId;
     document.getElementById('profile-mobile-no').value = profile.mobileNo || '';
     document.getElementById('profile-email-id').value = profile.emailId || '';
     document.getElementById('profile-password').value = profile.password || '';
     document.getElementById('profile-preview').src = profile.photoUrl || 'https://storage.googleapis.com/workspace-0f70711f-8b4e-4d94-86f1-2a93ccde5887/image/99a20669-ecb4-4325-a970-491b8dac39a9.png';
-    updateSidebarProfile(profile.name, currentEmployeeId, profile.photoUrl);
+    await updateSidebarProfile(profile.name, currentEmployeeId, profile.photoUrl);
   }
   
-  document.getElementById('profile-form').addEventListener('submit', (e) => {
+  document.getElementById('profile-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     if (!currentEmployeeId) {
         showAlert('Please login to save your profile.');
@@ -2910,24 +2856,24 @@
     const password = document.getElementById('profile-password').value;
     const photoFile = document.getElementById('upload-photo').files[0];
     
-    let currentProfile = getUserProfile(employeeId);
+    let currentProfile = await getUserProfile(employeeId);
     let photoUrl = currentProfile.photoUrl || 'https://storage.googleapis.com/workspace-0f70711f-8b4e-4d94-86f1-2a93ccde5887/image/99a20669-ecb4-4325-a970-491b8dac39a9.png';
     
     if (photoFile) {
       const reader = new FileReader();
-      reader.onload = (event) => {
+      reader.onload = async (event) => {
         photoUrl = event.target.result;
         const updatedProfile = { employeeId, name, mobileNo, emailId, password, photoUrl };
-        saveUserProfile(updatedProfile);
+        await saveUserProfile(updatedProfile);
         showAlert('Profile saved successfully!');
-        updateSidebarProfile(name, employeeId, photoUrl);
+        await updateSidebarProfile(name, employeeId, photoUrl);
       };
       reader.readAsDataURL(photoFile);
     } else {
       const updatedProfile = { employeeId, name, mobileNo, emailId, password, photoUrl };
-      saveUserProfile(updatedProfile);
+      await saveUserProfile(updatedProfile);
       showAlert('Profile saved successfully!');
-      updateSidebarProfile(name, employeeId, photoUrl);
+      await updateSidebarProfile(name, employeeId, photoUrl);
     }
   });
   
@@ -2942,9 +2888,9 @@
     }
   });
   
-  function updateSidebarProfile(name, id, photoUrl) {
+  async function updateSidebarProfile(name, id, photoUrl) {
     if (currentUserRole === 'admin') {
-        const profile = getUserProfile(id);
+        const profile = await getUserProfile(id);
         const displayName = profile.name || id.replace('ADM-', '') || "Admin User";
         document.getElementById('sidebar-employee-name').textContent = displayName;
         document.getElementById('sidebar-employee-id').textContent = id;
@@ -2957,7 +2903,7 @@
   
   // --- Admin Profile Management ---
   
-  function loadAdminDetails() {
+  async function loadAdminDetails() {
       if (currentUserRole !== 'admin') {
           document.getElementById('admin-details-table').innerHTML = '<tr><td colspan="5">Access Denied</td></tr>';
           return;
@@ -2965,7 +2911,7 @@
       
       const adminTableBody = document.getElementById('admin-details-table');
       adminTableBody.innerHTML = '';
-      const allAdminProfiles = getAllUserProfiles().filter(p => p.employeeId.startsWith('ADM-'));
+      const allAdminProfiles = (await getAllUserProfiles()).filter(p => p.employeeId.startsWith('ADM-'));
       
       if (allAdminProfiles.length === 0) {
           adminTableBody.innerHTML = '<tr><td colspan="5">No admin profiles found. Please ensure at least one admin logs in to create their profile.</td></tr>';
@@ -2988,60 +2934,48 @@
   
   // --- Employee Management (Admin Only - for non-admin employees) ---
   
-  const _orig_loadEmployeeDetails = window.loadEmployeeDetails;
-  window.loadEmployeeDetails = async function() {
-    if (currentUserRole !== 'admin') {
-      document.getElementById('employee-details-table').innerHTML = '<tr><td colspan="5">Access Denied</td></tr>';
-      return;
-    }
-    
-    if (CONFIG.USE_REMOTE && TOKEN) {
-      try {
-        const users = await TrackerAPI.getUsers();
-        const employeeTableBody = document.getElementById('employee-details-table');
-        employeeTableBody.innerHTML = '';
-        
-        const nonAdminEmployees = users.filter(u => u.role !== 'admin');
-        
-        if (nonAdminEmployees.length === 0) {
-          employeeTableBody.innerHTML = '<tr><td colspan="5">No employee profiles found.</td></tr>';
-          return;
-        }
-        
-        nonAdminEmployees.forEach(user => {
-          const row = employeeTableBody.insertRow();
-          row.insertCell(0).textContent = user.employeeId || 'N/A';
-          row.insertCell(1).textContent = user.name || 'N/A';
-          row.insertCell(2).textContent = user.mobileNo || 'N/A';
-          row.insertCell(3).textContent = user.emailId || 'N/A';
-          const actionsCell = row.insertCell(4);
-          actionsCell.innerHTML = `
-            <button onclick="adminEditEmployee('${user.id}')">Edit</button>
-            <button onclick="adminDeleteEmployee('${user.id}')">Delete</button>
-          `;
-        });
-        
-        return;
-      } catch (e) {
-        console.error('Failed to fetch from backend, using local storage', e);
-      }
-    }
-    
-    // Fallback to local storage
-    if (typeof _orig_loadEmployeeDetails === 'function') {
-      return _orig_loadEmployeeDetails();
-    }
-  };
-  
-  function loadEmployeeDetails() {
+  async function loadEmployeeDetails() {
       if (currentUserRole !== 'admin') {
           document.getElementById('employee-details-table').innerHTML = '<tr><td colspan="5">Access Denied</td></tr>';
           return;
       }
       
+      if (CONFIG.USE_REMOTE && TOKEN) {
+        try {
+          const users = await TrackerAPI.getUsers();
+          const employeeTableBody = document.getElementById('employee-details-table');
+          employeeTableBody.innerHTML = '';
+          
+          const nonAdminEmployees = users.filter(u => u.role !== 'admin');
+          
+          if (nonAdminEmployees.length === 0) {
+            employeeTableBody.innerHTML = '<tr><td colspan="5">No employee profiles found.</td></tr>';
+            return;
+          }
+          
+          nonAdminEmployees.forEach(user => {
+            const row = employeeTableBody.insertRow();
+            row.insertCell(0).textContent = user.employeeId || 'N/A';
+            row.insertCell(1).textContent = user.name || 'N/A';
+            row.insertCell(2).textContent = user.mobileNo || 'N/A';
+            row.insertCell(3).textContent = user.emailId || 'N/A';
+            const actionsCell = row.insertCell(4);
+            actionsCell.innerHTML = `
+              <button onclick="adminEditEmployee('${user.id}')">Edit</button>
+              <button onclick="adminDeleteEmployee('${user.id}')">Delete</button>
+            `;
+          });
+          
+          return;
+        } catch (e) {
+          console.error('Failed to fetch from backend, using local storage', e);
+        }
+      }
+      
+      // Fallback to local storage
       const employeeTableBody = document.getElementById('employee-details-table');
       employeeTableBody.innerHTML = '';
-      const allProfiles = getAllUserProfiles();
+      const allProfiles = await getAllUserProfiles();
       const nonAdminEmployeeProfiles = allProfiles.filter(p => !p.employeeId.startsWith('ADM-'));
       
       if (nonAdminEmployeeProfiles.length === 0) {
@@ -3063,60 +2997,60 @@
       });
   }
   
-  function adminEditEmployee(employeeId) {
+  async function adminEditEmployee(employeeId) {
       if (currentUserRole !== 'admin') {
           showAlert('Access Denied.');
           return;
       }
       
-      const profile = getUserProfile(employeeId);
+      const profile = await getUserProfile(employeeId);
       if (profile) {
           if (employeeId.startsWith('ADM-')) {
               const newName = prompt(`Edit name for Admin (${employeeId}):`, profile.name || employeeId.replace('ADM-', ''));
               if (newName !== null && newName.trim() !== '') {
                   profile.name = newName.trim();
-                  saveUserProfile(profile);
+                  await saveUserProfile(profile);
                   showAlert('Admin name updated.');
               }
               
               const newMobile = prompt(`Edit mobile number for Admin (${employeeId}):`, profile.mobileNo);
               if (newMobile !== null && newMobile.trim() !== '') {
                   profile.mobileNo = newMobile.trim();
-                  saveUserProfile(profile);
+                  await saveUserProfile(profile);
                   showAlert('Admin mobile number updated.');
               }
               
               const newEmail = prompt(`Edit email for Admin (${employeeId}):`, profile.emailId);
               if (newEmail !== null && newEmail.trim() !== '') {
                   profile.emailId = newEmail.trim();
-                  saveUserProfile(profile);
+                  await saveUserProfile(profile);
                   showAlert('Admin email updated.');
               }
               
-              loadAdminDetails();
+              await loadAdminDetails();
           } else {
               const newName = prompt(`Edit name for ${employeeId}:`, profile.name);
               if (newName !== null && newName.trim() !== '') {
                   profile.name = newName.trim();
-                  saveUserProfile(profile);
+                  await saveUserProfile(profile);
                   showAlert('Employee name updated.');
               }
               
               const newMobile = prompt(`Edit mobile number for ${employeeId}:`, profile.mobileNo);
               if (newMobile !== null && newMobile.trim() !== '') {
                   profile.mobileNo = newMobile.trim();
-                  saveUserProfile(profile);
+                  await saveUserProfile(profile);
                   showAlert('Employee mobile number updated.');
               }
               
               const newEmail = prompt(`Edit email for ${employeeId}:`, profile.emailId);
               if (newEmail !== null && newEmail.trim() !== '') {
                   profile.emailId = newEmail.trim();
-                  saveUserProfile(profile);
+                  await saveUserProfile(profile);
                   showAlert('Employee email updated.');
               }
               
-              loadEmployeeDetails();
+              await loadEmployeeDetails();
           }
       } else {
           showAlert('Profile not found.');
@@ -3163,7 +3097,7 @@
         
         showAlert(`Employee ${id} added successfully!`);
         closeAddEmployeeModal();
-        loadEmployeeDetails();
+        await loadEmployeeDetails();
         return;
       } catch (e) {
         console.error('Failed to create user in backend, falling back to local', e);
@@ -3185,11 +3119,11 @@
       return;
     }
     
-    saveUserProfile(newProfile);
+    await saveUserProfile(newProfile);
     showAlert(`Employee ${id} added successfully!`);
     closeAddEmployeeModal();
-    loadEmployeeDetails();
-    populateEmployeeFilter();
+    await loadEmployeeDetails();
+    await populateEmployeeFilter();
   });
   
   // --- Admin Management (Add Admin Modal) ---
@@ -3208,7 +3142,7 @@
     document.getElementById('add-admin-form').reset();
   }
   
-  document.getElementById('add-admin-form').addEventListener('submit', function(e) {
+  document.getElementById('add-admin-form').addEventListener('submit', async function(e) {
     e.preventDefault();
     const username = document.getElementById('new-admin-username').value.trim().toUpperCase();
     const name = document.getElementById('new-admin-name').value.trim();
@@ -3242,13 +3176,13 @@
       photoUrl: 'https://storage.googleapis.com/workspace-0f70711f-8b4e-4d94-86f1-2a93ccde5887/image/default-employee.png' // Default photo for new admins
     };
     
-    saveUserProfile(newAdminProfile);
+    await saveUserProfile(newAdminProfile);
     showAlert(`Admin ${username} added successfully!`);
     closeAddAdminModal();
-    loadAdminDetails(); // Reload admin details table
+    await loadAdminDetails(); // Reload admin details table
   });
   
-  function adminDeleteEmployee(employeeId) {
+  async function adminDeleteEmployee(employeeId) {
       if (currentUserRole !== 'admin') {
           showAlert('Access Denied.');
           return;
@@ -3284,10 +3218,10 @@
               showAlert(`${employeeId.startsWith('ADM-') ? 'Admin' : 'Employee'} ${employeeId} and all their data deleted successfully!`);
               
               if (employeeId.startsWith('ADM-')) {
-                  loadAdminDetails(); // Reload admin details table
+                  await loadAdminDetails(); // Reload admin details table
               } else {
-                  loadEmployeeDetails();
-                  populateEmployeeFilter(); // Update employee filter dropdown
+                  await loadEmployeeDetails();
+                  await populateEmployeeFilter(); // Update employee filter dropdown
               }
           }
       });
@@ -3327,7 +3261,7 @@
   // --- Offline Detection and Handling ---
   
   function setupOfflineDetection() {
-    const updateOnlineStatus = () => {
+    const updateOnlineStatus = async () => {
       const status = navigator.onLine ? 'online' : 'offline';
       console.log(`App is ${status}`);
       
@@ -3349,18 +3283,17 @@
           syncStatusElement.textContent = 'Syncing...';
           syncStatusElement.className = 'sync-status syncing';
           
-          TrackerAPI.syncData()
-            .then(() => {
-              showAlert('Data synced successfully!');
-              syncStatusElement.textContent = 'Online';
-              syncStatusElement.className = 'sync-status online';
-            })
-            .catch(e => {
-              console.error('Failed to sync data', e);
-              showAlert('Failed to sync data. Please try manually.');
-              syncStatusElement.textContent = 'Online';
-              syncStatusElement.className = 'sync-status online';
-            });
+          try {
+            await TrackerAPI.syncData();
+            showAlert('Data synced successfully!');
+            syncStatusElement.textContent = 'Online';
+            syncStatusElement.className = 'sync-status online';
+          } catch (e) {
+            console.error('Failed to sync data', e);
+            showAlert('Failed to sync data. Please try manually.');
+            syncStatusElement.textContent = 'Online';
+            syncStatusElement.className = 'sync-status online';
+          }
         }
       }
     };
@@ -3374,5 +3307,3 @@
 </script>
 </body>
 </html>
-
-
