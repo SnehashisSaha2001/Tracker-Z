@@ -825,7 +825,6 @@
   
   <!-- Sync Status Indicator -->
   <div id="syncStatus" class="sync-status online">Online</div>
-
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script>
@@ -1251,7 +1250,7 @@
         currentUserRole = lastLoggedInRole;
         currentEmployeeId = lastLoggedInEmployeeId;
         // Retrieve the full profile to update sidebar details correctly
-        const userProfile = await getUserProfile(currentEmployeeId);
+        const userProfile = getUserProfile(currentEmployeeId);
         updateSidebarProfile(userProfile.name, userProfile.employeeId, userProfile.photoUrl);
         await login(); // Call the login function to set up UI and navigate to appropriate section
     } else {
@@ -1386,7 +1385,7 @@
           }
           
           // Retrieve the stored profile to get the correct password and mobile number
-          const employeeProfile = await getUserProfile(employeeIdInput);
+          const employeeProfile = getUserProfile(employeeIdInput);
           
           if (!employeeProfile || !employeeProfile.password || !employeeProfile.mobileNo) {
               showAlert('Employee profile data incomplete. Please contact your administrator.');
@@ -1415,7 +1414,7 @@
               return;
           }
           
-          let adminProfile = await getUserProfile(adminUsernameInput);
+          let adminProfile = getUserProfile(adminUsernameInput);
           let isPredefinedAdmin = allowedAdminUsernames.includes(adminUsernameInput);
           
           if (!isPredefinedAdmin && Object.keys(adminProfile).length === 0) {
@@ -1495,6 +1494,16 @@
       }
       
       await updateSidebarProfile();
+      
+      // Sync data from backend to ensure we have all employee profiles
+      if (CONFIG.USE_REMOTE && TOKEN) {
+        try {
+          await TrackerAPI.syncData();
+          console.log('Data synced successfully on login');
+        } catch (e) {
+          console.error('Failed to sync data on login:', e);
+        }
+      }
       
       // Initialize Socket.IO for real-time updates
       initSocketIO();
@@ -1906,14 +1915,14 @@
         // Attempt to geocode the manually entered location if live location is not available
         if (visitLocationInput) {
             try {
-                const geocoded = await reverseGeocode(null, null, visitLocationInput); // Try to geocode the input
-                if (geocoded.address) {
+                const geocoded = await geocode({ address: visitLocationInput }, TOKEN); // Use new geocode function
+                if (geocoded && geocoded.results && geocoded.results.length > 0) {
                     visitLocationData = {
-                        lat: geocoded.lat,
-                        lng: geocoded.lng,
-                        address: geocoded.address
+                        lat: parseFloat(geocoded.results[0].lat),
+                        lng: parseFloat(geocoded.results[0].lon),
+                        address: geocoded.results[0].display_name
                     };
-                    visitMapLink = `https://www.openstreetmap.org/?mlat=${geocoded.lat}&mlon=${geocoded.lng}#map=15/${geocoded.lat}/${geocoded.lng}`;
+                    visitMapLink = `https://www.openstreetmap.org/?mlat=${visitLocationData.lat}&mlon=${visitLocationData.lng}#map=15/${visitLocationData.lat}/${visitLocationData.lng}`;
                 } else {
                     visitLocationData = visitLocationInput; // Use raw input if geocoding fails
                 }
@@ -2066,22 +2075,55 @@
       return;
     }
     
+    // Get all unique employee IDs and fetch their profiles
+    const uniqueEmployeeIds = [...new Set(records.map(rec => rec.employeeId))];
+    const employeeProfiles = {};
+    
+    // Try to get profiles from localStorage first
+    uniqueEmployeeIds.forEach(empId => {
+      const profile = getUserProfile(empId);
+      if (profile.name) {
+        employeeProfiles[empId] = profile;
+      }
+    });
+    
+    // If we're missing profiles and online, try to fetch them
+    if (CONFIG.USE_REMOTE && TOKEN) {
+      try {
+        const users = await TrackerAPI.getUsers();
+        users.forEach(user => {
+          if (!employeeProfiles[user.employeeId]) {
+            employeeProfiles[user.employeeId] = {
+              name: user.name,
+              employeeId: user.employeeId
+            };
+            // Cache the profile for future use
+            localStorage.setItem(`userProfile_${user.employeeId}`, JSON.stringify(employeeProfiles[user.employeeId]));
+          }
+        });
+      } catch (e) {
+        console.error('Failed to fetch user profiles:', e);
+      }
+    }
+    
     records.forEach(record => {
       const row = dailyActivityTableBody.insertRow();
       const recordDateTime = new Date(record.timestamp);
       const recordDate = recordDateTime.toLocaleDateString();
       const recordTime = recordDateTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      const employeeProfile = getUserProfile(record.employeeId); // Get employee profile
-      const employeeName = employeeProfile.name || 'N/A'; // Get employee name
+      
+      // Get employee name with fallback
+      const employeeProfile = employeeProfiles[record.employeeId] || {};
+      const employeeName = employeeProfile.name || record.employeeId || 'N/A';
       
       row.insertCell(0).textContent = record.employeeId || 'N/A';
-      row.insertCell(1).textContent = employeeName; // NEW CELL FOR NAME
+      row.insertCell(1).textContent = employeeName; // Employee name
       row.insertCell(2).textContent = record.type;
       row.insertCell(3).textContent = `${recordDate} ${recordTime}`;
       
-      const locationCell = row.insertCell(4); // Adjusted index
-      const latitudeCell = row.insertCell(5); // Adjusted index
-      const longitudeCell = row.insertCell(6); // Adjusted index
+      const locationCell = row.insertCell(4);
+      const latitudeCell = row.insertCell(5);
+      const longitudeCell = row.insertCell(6);
       
       if (record.location) {
           if (typeof record.location === 'object' && record.location.address) {
@@ -2099,7 +2141,7 @@
           longitudeCell.textContent = 'N/A';
       }
       
-      const mapCell = row.insertCell(7); // Adjusted index
+      const mapCell = row.insertCell(7);
       if (record.mapLink) {
         // Using OpenStreetMap pin image
         mapCell.innerHTML = `<a href="${record.mapLink}" target="_blank" style="color: #00d4ff;">
@@ -2110,7 +2152,7 @@
         mapCell.textContent = 'N/A';
       }
       
-      const detailsCell = row.insertCell(8); // Adjusted index
+      const detailsCell = row.insertCell(8);
       detailsCell.textContent = record.details || 'N/A';
     });
   }
@@ -2119,51 +2161,81 @@
   let leafletMarker;
   
   /**
-   * Reverse geocodes coordinates to an address using OpenStreetMap Nominatim.
+   * New Geocode utility
+   * - If you pass { lat, lon }, it does reverse geocoding (coords → address)
+   * - If you pass { address }, it does forward geocoding (address → coords)
+   */
+  async function geocode({ lat, lon, address }, token) {
+    try {
+      let url;
+      if (address) {
+        url = `${CONFIG.API_BASE}/api/geocode?address=${encodeURIComponent(address)}`;
+      } else if (lat && lon) {
+        url = `${CONFIG.API_BASE}/api/geocode?lat=${lat}&lon=${lon}`;
+      } else {
+        throw new Error("Provide either { address } or { lat, lon }");
+      }
+      const response = await fetch(url, {
+        headers: {
+          "Authorization": `Bearer ${token}`, // required by backend
+          "Content-Type": "application/json"
+        }
+      });
+      if (!response.ok) {
+        throw new Error(`Geocode API error: ${response.status}`);
+      }
+      const data = await response.json();
+      if (!data.success) {
+        throw new Error(data.error || "Geocoding failed");
+      }
+      console.log("Geocode result:", data);
+      return data; // will contain .address (reverse) or .results (forward)
+    } catch (err) {
+      console.error("Geocoding error:", err);
+      return null;
+    }
+  }
+  
+  /**
+   * Reverse geocodes coordinates to an address using the new geocode function.
    * @param {number} lat Latitude.
    * @param {number} lng Longitude.
    * @param {string} query Optional: If lat/lng are null, attempts to geocode a text query.
    * @returns {Promise<object>} A promise that resolves with {address: string, lat: number, lng: number} or an error.
    */
   async function reverseGeocode(lat, lng, query = null) {
-      let url;
+    try {
+      let result;
+      
       if (lat !== null && lng !== null) {
-          url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}`;
+        // Use the new geocoding function for reverse geocoding
+        result = await geocode({ lat, lon }, TOKEN);
+        
+        if (result && result.address) {
+          return {
+            address: result.address.display_name || 'Unknown Address',
+            lat: parseFloat(result.address.lat || lat),
+            lng: parseFloat(result.address.lon || lng)
+          };
+        }
       } else if (query) {
-          url = `https://nominatim.openstreetmap.org/search?format=jsonv2&q=${encodeURIComponent(query)}&limit=1`;
-      } else {
-          return { address: 'N/A', lat: null, lng: null };
+        // Use the new geocoding function for forward geocoding
+        result = await geocode({ address: query }, TOKEN);
+        
+        if (result && result.results && result.results.length > 0) {
+          return {
+            address: result.results[0].display_name || 'Unknown Address',
+            lat: parseFloat(result.results[0].lat),
+            lng: parseFloat(result.results[0].lon)
+          };
+        }
       }
       
-      try {
-          const response = await fetch(url, {
-              headers: {
-                  'User-Agent': 'TrackerApp/1.0 (your-email@example.com)' // Required by Nominatim
-              }
-          });
-          if (!response.ok) {
-              throw new Error(`HTTP error! status: ${response.status}`);
-          }
-          const data = await response.json();
-          if (lat !== null && lng !== null) { // Reverse geocoding
-              return {
-                  address: data.display_name || 'Unknown Address',
-                  lat: parseFloat(data.lat),
-                  lng: parseFloat(data.lon)
-              };
-          } else if (query && data.length > 0) { // Forward geocoding
-              return {
-                  address: data[0].display_name || 'Unknown Address',
-                  lat: parseFloat(data[0].lat),
-                  lng: parseFloat(data[0].lon)
-              };
-          } else {
-              return { address: 'Address not found', lat: null, lng: null };
-          }
-      } catch (error) {
-          console.error("Geocoding error:", error);
-          return { address: 'Geocoding failed', lat: null, lng: null };
-      }
+      return { address: 'N/A', lat: null, lng: null };
+    } catch (error) {
+      console.error("Geocoding error:", error);
+      return { address: 'Geocoding failed', lat: null, lng: null };
+    }
   }
   
   function startLocationTracking() {
@@ -2220,10 +2292,10 @@
               leafletMarker.setLatLng([latitude, longitude]);
               
               try {
-                  // Get address using reverse geocoding
-                  const geocoded = await reverseGeocode(latitude, longitude);
-                  if (geocoded.address) {
-                      document.getElementById('current-address').textContent = geocoded.address;
+                  // Get address using the new geocode function
+                  const geocoded = await geocode({ lat: latitude, lon: longitude }, TOKEN);
+                  if (geocoded && geocoded.address) {
+                      document.getElementById('current-address').textContent = geocoded.address.display_name || 'Unknown Address';
                       
                       // Update the location of the currently active Check-In session
                       const activeCheckInSessionId = localStorage.getItem(`currentCheckInSessionId_${currentEmployeeId}`);
@@ -2234,7 +2306,7 @@
                               records[recordIndex].location = {
                                   lat: latitude,
                                   lng: longitude,
-                                  address: geocoded.address
+                                  address: geocoded.address.display_name || 'Unknown Address'
                               };
                               records[recordIndex].mapLink = `https://www.openstreetmap.org/?mlat=${latitude}&mlon=${longitude}#map=15/${latitude}/${longitude}`;
                               await saveDailyActivityRecords(records);
@@ -2399,7 +2471,6 @@
     const followupTableBody = document.getElementById('followup-table');
     followupTableBody.innerHTML = '';
     
-    // Fixed: Properly await the getFollowUps function before sorting
     const followups = (await getFollowUps()).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
     const employeeIdHeader = document.getElementById('followup-employee-id-header');
     const employeeNameHeader = document.getElementById('followup-employee-name-header');
@@ -2417,15 +2488,48 @@
       return;
     }
     
+    // Get all unique employee IDs and fetch their profiles
+    const uniqueEmployeeIds = [...new Set(followups.map(f => f.employeeId))];
+    const employeeProfiles = {};
+    
+    // Try to get profiles from localStorage first
+    uniqueEmployeeIds.forEach(empId => {
+      const profile = getUserProfile(empId);
+      if (profile.name) {
+        employeeProfiles[empId] = profile;
+      }
+    });
+    
+    // If we're missing profiles and online, try to fetch them
+    if (CONFIG.USE_REMOTE && TOKEN) {
+      try {
+        const users = await TrackerAPI.getUsers();
+        users.forEach(user => {
+          if (!employeeProfiles[user.employeeId]) {
+            employeeProfiles[user.employeeId] = {
+              name: user.name,
+              employeeId: user.employeeId
+            };
+            // Cache the profile for future use
+            localStorage.setItem(`userProfile_${user.employeeId}`, JSON.stringify(employeeProfiles[user.employeeId]));
+          }
+        });
+      } catch (e) {
+        console.error('Failed to fetch user profiles:', e);
+      }
+    }
+    
     followups.forEach(followup => {
       const row = followupTableBody.insertRow();
-      const employeeProfile = getUserProfile(followup.employeeId);
-      const employeeName = employeeProfile.name || 'N/A';
+      
+      // Get employee name with fallback
+      const employeeProfile = employeeProfiles[followup.employeeId] || {};
+      const employeeName = employeeProfile.name || followup.employeeId || 'N/A';
       
       let cellIndex = 0;
       if (currentUserRole === 'admin') {
           row.insertCell(cellIndex++).textContent = followup.employeeId || 'N/A';
-          row.insertCell(cellIndex++).textContent = employeeName;
+          row.insertCell(cellIndex++).textContent = employeeName; // Employee name
       }
       
       row.insertCell(cellIndex++).textContent = followup.subject;
@@ -2534,7 +2638,6 @@
     const stateTableBody = document.getElementById('state-table');
     stateTableBody.innerHTML = '';
     
-    // Fixed: Properly await the getStates function before sorting
     const states = (await getStates()).sort((a, b) => a.name.localeCompare(b.name));
     
     if (states.length === 0) {
@@ -2607,7 +2710,6 @@
     const stateTableBody = document.getElementById('state-table');
     stateTableBody.innerHTML = '';
     
-    // Fixed: Properly await the getStates function before filtering and sorting
     const states = (await getStates()).filter(state =>
       state.name.toLowerCase().includes(searchTerm)
     ).sort((a, b) => a.name.localeCompare(b.name));
@@ -2707,7 +2809,6 @@
     const cityTableBody = document.getElementById('city-table');
     cityTableBody.innerHTML = '';
     
-    // Fixed: Properly await the getCities function before sorting
     const cities = (await getCities()).sort((a, b) => {
       const stateCompare = a.stateName.localeCompare(b.stateName);
       if (stateCompare !== 0) return stateCompare;
@@ -2772,7 +2873,6 @@
     const cityTableBody = document.getElementById('city-table');
     cityTableBody.innerHTML = '';
     
-    // Fixed: Properly await the getCities function before filtering and sorting
     const cities = (await getCities()).filter(city =>
       city.name.toLowerCase().includes(searchTerm) ||
       city.stateName.toLowerCase().includes(searchTerm)
@@ -2801,7 +2901,7 @@
   
   // --- User Profile ---
   
-  async function getUserProfile(employeeId = currentEmployeeId) {
+  function getUserProfile(employeeId = currentEmployeeId) {
     if (!employeeId) return {};
     const profile = localStorage.getItem(`userProfile_${employeeId}`);
     return profile ? JSON.parse(profile) : {};
@@ -2832,7 +2932,7 @@
         return;
     }
     
-    const profile = await getUserProfile();
+    const profile = getUserProfile();
     document.getElementById('profile-name').value = profile.name || '';
     document.getElementById('profile-employee-id').value = currentEmployeeId;
     document.getElementById('profile-mobile-no').value = profile.mobileNo || '';
@@ -2856,7 +2956,7 @@
     const password = document.getElementById('profile-password').value;
     const photoFile = document.getElementById('upload-photo').files[0];
     
-    let currentProfile = await getUserProfile(employeeId);
+    let currentProfile = getUserProfile(employeeId);
     let photoUrl = currentProfile.photoUrl || 'https://storage.googleapis.com/workspace-0f70711f-8b4e-4d94-86f1-2a93ccde5887/image/99a20669-ecb4-4325-a970-491b8dac39a9.png';
     
     if (photoFile) {
@@ -2890,7 +2990,7 @@
   
   async function updateSidebarProfile(name, id, photoUrl) {
     if (currentUserRole === 'admin') {
-        const profile = await getUserProfile(id);
+        const profile = getUserProfile(id);
         const displayName = profile.name || id.replace('ADM-', '') || "Admin User";
         document.getElementById('sidebar-employee-name').textContent = displayName;
         document.getElementById('sidebar-employee-id').textContent = id;
@@ -3003,7 +3103,7 @@
           return;
       }
       
-      const profile = await getUserProfile(employeeId);
+      const profile = getUserProfile(employeeId);
       if (profile) {
           if (employeeId.startsWith('ADM-')) {
               const newName = prompt(`Edit name for Admin (${employeeId}):`, profile.name || employeeId.replace('ADM-', ''));
@@ -3243,19 +3343,106 @@
         });
       });
       
-      socket.on('activity_update', (data) => {
-        console.log('Activity update received:', data);
-        
-        // Refresh activity list if on daily-activity page
-        if (document.getElementById('daily-activity').classList.contains('active')) {
-          loadDailyActivity();
-        }
-      });
-      
       socket.on('disconnect', () => {
         console.log('Disconnected from server');
       });
+      
+      // Listen for activity updates
+      socket.on('activity_update', (data) => {
+        console.log('Activity update received:', data);
+        
+        // If we're on the daily-activity page, refresh the data
+        if (document.getElementById('daily-activity').classList.contains('active')) {
+          loadDailyActivity();
+        }
+        
+        // Show a notification for real-time updates
+        if (data.action === 'created') {
+          showNotification(`New ${data.activity.type} recorded by ${data.activity.employeeId}`);
+        } else if (data.action === 'updated') {
+          showNotification(`Activity updated by ${data.activity.employeeId}`);
+        }
+      });
+      
+      // Listen for followup updates
+      socket.on('followup_update', (data) => {
+        console.log('Followup update received:', data);
+        
+        // If we're on the followups page, refresh the data
+        if (document.getElementById('followups').classList.contains('active')) {
+          loadFollowUps();
+        }
+        
+        // Show a notification for real-time updates
+        if (data.action === 'created') {
+          showNotification(`New follow-up added: ${data.followup.subject}`);
+        } else if (data.action === 'updated') {
+          showNotification(`Follow-up updated: ${data.followup.subject}`);
+        }
+      });
+      
+      // Listen for task updates
+      socket.on('task_update', (data) => {
+        console.log('Task update received:', data);
+        
+        // Show a notification for task updates
+        if (data.action === 'created') {
+          showNotification(`New task created: ${data.task.title}`);
+        } else if (data.action === 'updated') {
+          showNotification(`Task updated: ${data.task.title}`);
+        } else if (data.action === 'deleted') {
+          showNotification(`Task deleted`);
+        }
+      });
+      
+      // Listen for location updates
+      socket.on('location_update', (data) => {
+        console.log('Location update received:', data);
+        
+        // If we're tracking location and this is the current user, update the map
+        if (data.location && data.location.user_id === currentEmployeeId && 
+            document.getElementById('daily-activity').classList.contains('active')) {
+          // Update the map with new location data
+          if (leafletMap && leafletMarker && data.location.latitude && data.location.longitude) {
+            leafletMap.setView([data.location.latitude, data.location.longitude], 15);
+            leafletMarker.setLatLng([data.location.latitude, data.location.longitude]);
+          }
+        }
+      });
     }
+  }
+  
+  // --- Notification System ---
+  
+  function showNotification(message) {
+    // Create a notification element
+    const notification = document.createElement('div');
+    notification.style.position = 'fixed';
+    notification.style.bottom = '20px';
+    notification.style.left = '50%';
+    notification.style.transform = 'translateX(-50%)';
+    notification.style.backgroundColor = 'var(--accent-color)';
+    notification.style.color = '#000';
+    notification.style.padding = '10px 20px';
+    notification.style.borderRadius = '8px';
+    notification.style.boxShadow = '0 4px 8px rgba(0, 0, 0, 0.2)';
+    notification.style.zIndex = '1000';
+    notification.style.fontWeight = 'bold';
+    notification.textContent = message;
+    
+    // Add to the DOM
+    document.body.appendChild(notification);
+    
+    // Remove after 3 seconds
+    setTimeout(() => {
+      notification.style.opacity = '0';
+      notification.style.transition = 'opacity 0.5s';
+      setTimeout(() => {
+        if (document.body.contains(notification)) {
+          document.body.removeChild(notification);
+        }
+      }, 500);
+    }, 3000);
   }
   
   // --- Offline Detection and Handling ---
@@ -3307,4 +3494,3 @@
 </script>
 </body>
 </html>
-
